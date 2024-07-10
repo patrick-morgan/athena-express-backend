@@ -5,7 +5,11 @@ import bodyParser from "body-parser";
 import { buildRequestPayload, gptApiCall } from "./prompts/chatgpt";
 import {
   articleContentReplace,
+  isObjectivityResponse,
+  isPoliticalBiasResponse,
   isSummaryResponse,
+  objectivityPrompt,
+  politicalBiasPrompt,
   summaryPrompt,
 } from "./prompts/prompts";
 
@@ -152,7 +156,6 @@ app.delete("/articles/:id", async (req, res) => {
   }
 });
 
-// Route to generate summary
 app.post("/generate-summary", async (req, res) => {
   const { articleContent } = req.body;
   const requestPayload = buildRequestPayload(summaryPrompt);
@@ -188,6 +191,86 @@ app.post("/generate-summary", async (req, res) => {
   } catch (error) {
     console.error("Error generating summary:", error);
     return res.status(500).json({ error: "Error generating summary" });
+  }
+});
+
+app.post("/analyze-political-bias", async (req, res) => {
+  const { articleContent } = req.body;
+  const requestPayload = buildRequestPayload(politicalBiasPrompt);
+  try {
+    // Update the article content in the request payload
+    requestPayload.messages[0].content =
+      requestPayload.messages[0].content.replace(
+        articleContentReplace,
+        articleContent
+      );
+
+    const response = await gptApiCall(requestPayload);
+    const responseData = response.data.choices[0].message.content;
+
+    // Attempt to parse the JSON response
+    let jsonResponse;
+    try {
+      jsonResponse = JSON.parse(responseData);
+    } catch (parseError) {
+      console.error("Error parsing political bias JSON response:", parseError);
+      return res
+        .status(500)
+        .json({ error: "Error parsing political bias JSON response" });
+    }
+
+    // Validate the JSON structure
+    if (isPoliticalBiasResponse(jsonResponse)) {
+      return res.json(jsonResponse);
+    } else {
+      console.error("Invalid political bias JSON structure:", jsonResponse);
+      return res
+        .status(500)
+        .json({ error: "Invalid political bias JSON structure" });
+    }
+  } catch (error) {
+    console.error("Error analyzing political bias:", error);
+    return res.status(500).json({ error: "Error analyzing political bias" });
+  }
+});
+
+app.post("/analyze-objectivity", async (req, res) => {
+  const { articleContent } = req.body;
+  const requestPayload = buildRequestPayload(objectivityPrompt);
+  try {
+    // Update the article content in the request payload
+    requestPayload.messages[0].content =
+      requestPayload.messages[0].content.replace(
+        articleContentReplace,
+        articleContent
+      );
+
+    const response = await gptApiCall(requestPayload);
+    const responseData = response.data.choices[0].message.content;
+
+    // Attempt to parse the JSON response
+    let jsonResponse;
+    try {
+      jsonResponse = JSON.parse(responseData);
+    } catch (parseError) {
+      console.error("Error parsing objectivity JSON response:", parseError);
+      return res
+        .status(500)
+        .json({ error: "Error parsing objectivity JSON response" });
+    }
+
+    // Validate the JSON structure
+    if (isObjectivityResponse(jsonResponse)) {
+      return res.json(jsonResponse);
+    } else {
+      console.error("Invalid objectivity JSON structure:", jsonResponse);
+      return res
+        .status(500)
+        .json({ error: "Invalid objectivity JSON structure" });
+    }
+  } catch (error) {
+    console.error("Error analyzing objectivity:", error);
+    return res.status(500).json({ error: "Error analyzing objectivity" });
   }
 });
 

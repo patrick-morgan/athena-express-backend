@@ -50,43 +50,6 @@ export const gptApiCall = async (requestPayload: RequestPayloadType) => {
   return response;
 };
 
-export const generateSummary = async (
-  articleContent: string
-): Promise<SummaryResponseType | null> => {
-  const requestPayload = buildRequestPayload(summaryPrompt);
-  try {
-    // Update the article content in the request payload
-    requestPayload.messages[0].content =
-      requestPayload.messages[0].content.replace(
-        articleContentReplace,
-        articleContent
-      );
-
-    const response = await gptApiCall(requestPayload);
-    const responseData = response.data.choices[0].message.content;
-
-    // Attempt to parse the JSON response
-    let jsonResponse: any;
-    try {
-      jsonResponse = JSON.parse(responseData);
-    } catch (parseError) {
-      console.error("Error parsing summary JSON response:", parseError);
-      return null;
-    }
-
-    // Validate the JSON structure
-    if (isSummaryResponse(jsonResponse)) {
-      return jsonResponse;
-    } else {
-      console.error("Invalid summary JSON structure:", jsonResponse);
-      return null;
-    }
-  } catch (error) {
-    console.error("Error generating summary:", error);
-    return null;
-  }
-};
-
 export const analyzePoliticalBias = async (
   articleContent: string
 ): Promise<PoliticalBiasResponseType | null> => {
