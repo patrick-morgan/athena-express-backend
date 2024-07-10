@@ -534,6 +534,7 @@ app.post(
 
       const response = await gptApiCall(requestPayload);
       let responseData = response.data.choices[0].message.content;
+      console.info("Objectivity JSON response:", responseData);
 
       // Clean the JSON string
       responseData = cleanJSONString(responseData);
@@ -542,7 +543,6 @@ app.post(
       let jsonResponse;
       try {
         jsonResponse = JSON.parse(responseData);
-        console.info("Objectivity JSON response:", jsonResponse);
       } catch (parseError) {
         console.error("Error parsing objectivity JSON response:", parseError);
         return res
