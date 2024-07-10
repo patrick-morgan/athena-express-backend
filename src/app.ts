@@ -1,70 +1,333 @@
-import express from "express";
+import express, { Request, Response } from "express";
 import cors from "cors";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, article } from "@prisma/client";
 import bodyParser from "body-parser";
 import { buildRequestPayload, gptApiCall } from "./prompts/chatgpt";
 import {
   articleContentReplace,
   isObjectivityResponse,
   isPoliticalBiasResponse,
+  isPublicationMetadataResponse,
   isSummaryResponse,
   objectivityPrompt,
   politicalBiasPrompt,
+  publicationMetadataPrompt,
   summaryPrompt,
 } from "./prompts/prompts";
+import { fetchPublicationMetadata } from "./publication";
 
-const prisma = new PrismaClient();
+export const prismaLocalClient = new PrismaClient();
+
 const app = express();
 
 app.use(cors());
 app.use(bodyParser.json());
 
-// Create an article
-app.post("/articles", async (req, res) => {
-  const {
-    title,
-    subtitle,
-    date,
-    text,
-    authors,
-    publicationId,
-    summaryId,
-    polarizationBiasId,
-    objectivityBiasId,
-  } = req.body;
+type ArticleRequestBody = {
+  title: string;
+  date: string;
+  url: string;
+  hostname: string;
+  authors: string[];
+  text: string;
+  subtitle?: string;
+};
 
-  try {
-    const article = await prisma.article.create({
-      data: {
-        title,
-        subtitle,
-        date: new Date(date),
-        text,
-        publication: publicationId,
-        summary: { connect: { id: summaryId } },
-        polarization_bias: { connect: { id: polarizationBiasId } },
-        objectivity_bias: { connect: { id: objectivityBiasId } },
-        article_authors: {
-          create: authors.map((authorId: string) => ({
-            journalist_id: authorId,
-          })),
+// Create or get article
+app.post(
+  "/articles",
+  async (req: Request<{}, {}, ArticleRequestBody>, res: Response) => {
+    const { title, subtitle, date, url, text, authors, hostname } = req.body;
+
+    try {
+      // Get publication by hostname
+      let publication = await prismaLocalClient.publication.findFirst({
+        where: { hostname },
+      });
+      console.info("Existing publication:", publication);
+
+      // If not found, create a new publication
+      if (!publication) {
+        const metadata = await fetchPublicationMetadata(hostname);
+        console.info("Publication metadata:", metadata);
+
+        if (metadata.date_founded !== null) {
+          const [month, day, year] = metadata.date_founded.split("/");
+          metadata.date_founded = `${year}-${month}-${day}`;
+        }
+
+        publication = await prismaLocalClient.publication.create({
+          data: {
+            hostname,
+            name: metadata.name,
+            date_founded: metadata.date_founded
+              ? new Date(metadata.date_founded)
+              : null,
+            // owner: metadata.owner,
+          },
+        });
+        console.log("Created publication:", publication);
+      }
+
+      let journalists = [];
+      // Get journalists by name/publication
+      for (let i = 0; i < authors.length; i++) {
+        let journalist = await prismaLocalClient.journalist.findFirst({
+          where: { name: authors[i], publication: publication.id },
+        });
+        console.log("Existing journalist:", journalist);
+        // If not found, create a new journalist
+        if (!journalist) {
+          journalist = await prismaLocalClient.journalist.create({
+            data: {
+              name: authors[i],
+              publication: publication.id,
+            },
+          });
+          console.log("Created journalist:", journalist);
+        }
+        journalists.push(journalist);
+      }
+
+      // Get article if it exists
+      let article = await prismaLocalClient.article.findFirst({
+        where: { url },
+      });
+      if (article) {
+        console.info("Existing article:", article);
+        return res.json(article);
+      }
+      // Create article
+      article = await prismaLocalClient.article.create({
+        data: {
+          title,
+          subtitle,
+          date: new Date(date),
+          url,
+          text,
+          publication: publication.id,
+          // summary: { connect: { id: summaryId } },
+          // polarization_bias: { connect: { id: polarizationBiasId } },
+          // objectivity_bias: { connect: { id: objectivityBiasId } },
+          article_authors: {
+            create: journalists.map((journalist) => ({
+              journalist_id: journalist.id,
+            })),
+          },
         },
-      },
-    });
-    res.json(article);
-  } catch (error) {
-    console.error("Error creating article:", error);
-    res.status(500).json({ error: "Error creating article" });
+      });
+      console.log("Created article:", article);
+      res.json(article);
+    } catch (error) {
+      console.error("Error creating article:", error);
+      res.status(500).json({ error: "Error creating article" });
+    }
   }
-});
+);
+
+type ArticlePayload = {
+  id: string;
+  text: string;
+};
+
+app.post(
+  "/generate-summary",
+  async (req: Request<{}, {}, ArticlePayload>, res: Response) => {
+    const { text, id: articleId } = req.body;
+    console.log("summary payload", req.body);
+    const requestPayload = buildRequestPayload(summaryPrompt);
+    try {
+      // Get article summary if it exists
+      const existingSummary = await prismaLocalClient.summary.findFirst({
+        where: { article_id: articleId },
+      });
+      if (existingSummary) {
+        console.info("Existing article summary:", existingSummary);
+        return res.json(existingSummary);
+      }
+
+      // Create article summary
+      // Update the article content in the request payload
+      requestPayload.messages[0].content =
+        requestPayload.messages[0].content.replace(articleContentReplace, text);
+
+      const response = await gptApiCall(requestPayload);
+      const responseData = response.data.choices[0].message.content;
+
+      // Attempt to parse the JSON response
+      let jsonResponse;
+      try {
+        jsonResponse = JSON.parse(responseData);
+        console.info("Summary JSON response:", jsonResponse);
+      } catch (parseError) {
+        console.error("Error parsing summary JSON response:", parseError);
+        return res
+          .status(500)
+          .json({ error: "Error parsing summary JSON response" });
+      }
+
+      // Validate the JSON structure
+      if (isSummaryResponse(jsonResponse)) {
+        // Create the article summary
+        const newArticleSummary = await prismaLocalClient.summary.create({
+          data: {
+            article_id: articleId,
+            summary: jsonResponse.summary,
+            footnotes: jsonResponse.footnotes,
+          },
+        });
+        console.info("Created article summary:", newArticleSummary);
+        return res.json(newArticleSummary);
+      } else {
+        console.error("Invalid summary JSON structure:", jsonResponse);
+        return res
+          .status(500)
+          .json({ error: "Invalid summary JSON structure" });
+      }
+    } catch (error) {
+      console.error("Error generating summary:", error);
+      return res.status(500).json({ error: "Error generating summary" });
+    }
+  }
+);
+
+app.post(
+  "/analyze-political-bias",
+  async (req: Request<{}, {}, ArticlePayload>, res: Response) => {
+    const { id: articleId, text } = req.body;
+    console.log("political bias payload", req.body);
+
+    const requestPayload = buildRequestPayload(politicalBiasPrompt);
+    try {
+      // Get article political bias if it exists
+      const existingBias = await prismaLocalClient.polarization_bias.findFirst({
+        where: { article_id: articleId },
+      });
+      if (existingBias) {
+        console.info("Existing article political bias:", existingBias);
+        return res.json(existingBias);
+      }
+
+      // Create article political bias
+      // Update the article content in the request payload
+      requestPayload.messages[0].content =
+        requestPayload.messages[0].content.replace(articleContentReplace, text);
+
+      const response = await gptApiCall(requestPayload);
+      const responseData = response.data.choices[0].message.content;
+
+      // Attempt to parse the JSON response
+      let jsonResponse;
+      try {
+        jsonResponse = JSON.parse(responseData);
+        console.info("Political bias JSON response:", jsonResponse);
+      } catch (parseError) {
+        console.error(
+          "Error parsing political bias JSON response:",
+          parseError
+        );
+        return res
+          .status(500)
+          .json({ error: "Error parsing political bias JSON response" });
+      }
+
+      // Validate the JSON structure
+      if (isPoliticalBiasResponse(jsonResponse)) {
+        // Create article political bias
+        const newArticleBias = await prismaLocalClient.polarization_bias.create(
+          {
+            data: {
+              article_id: articleId,
+              analysis: jsonResponse.analysis,
+              bias_score: jsonResponse.bias_score,
+              footnotes: jsonResponse.footnotes,
+            },
+          }
+        );
+        console.info("Created article political bias:", newArticleBias);
+        return res.json(newArticleBias);
+      } else {
+        console.error("Invalid political bias JSON structure:", jsonResponse);
+        return res
+          .status(500)
+          .json({ error: "Invalid political bias JSON structure" });
+      }
+    } catch (error) {
+      console.error("Error analyzing political bias:", error);
+      return res.status(500).json({ error: "Error analyzing political bias" });
+    }
+  }
+);
+
+app.post(
+  "/analyze-objectivity",
+  async (req: Request<{}, {}, ArticlePayload>, res: Response) => {
+    const { id: articleId, text } = req.body;
+    console.log("objectivity payload", req.body);
+
+    const requestPayload = buildRequestPayload(objectivityPrompt);
+    try {
+      // Get article objectivity if it exists
+      const existingBias = await prismaLocalClient.objectivity_bias.findFirst({
+        where: { article_id: articleId },
+      });
+      if (existingBias) {
+        console.info("Existing article objectivity:", existingBias);
+        return res.json(existingBias);
+      }
+      // Create article objectivity
+      // Update the article content in the request payload
+      requestPayload.messages[0].content =
+        requestPayload.messages[0].content.replace(articleContentReplace, text);
+
+      const response = await gptApiCall(requestPayload);
+      const responseData = response.data.choices[0].message.content;
+
+      // Attempt to parse the JSON response
+      let jsonResponse;
+      try {
+        jsonResponse = JSON.parse(responseData);
+        console.info("Objectivity JSON response:", jsonResponse);
+      } catch (parseError) {
+        console.error("Error parsing objectivity JSON response:", parseError);
+        return res
+          .status(500)
+          .json({ error: "Error parsing objectivity JSON response" });
+      }
+
+      // Validate the JSON structure
+      if (isObjectivityResponse(jsonResponse)) {
+        // Create article objectivity
+        const newArticleBias = await prismaLocalClient.objectivity_bias.create({
+          data: {
+            article_id: articleId,
+            analysis: jsonResponse.analysis,
+            rhetoric_score: jsonResponse.rhetoric_score,
+            footnotes: jsonResponse.footnotes,
+          },
+        });
+        console.info("Created article objectivity:", newArticleBias);
+        return res.json(newArticleBias);
+      } else {
+        console.error("Invalid objectivity JSON structure:", jsonResponse);
+        return res
+          .status(500)
+          .json({ error: "Invalid objectivity JSON structure" });
+      }
+    } catch (error) {
+      console.error("Error analyzing objectivity:", error);
+      return res.status(500).json({ error: "Error analyzing objectivity" });
+    }
+  }
+);
 
 // Get all articles
 app.get("/articles", async (req, res) => {
   try {
-    const articles = await prisma.article.findMany({
+    const articles = await prismaLocalClient.article.findMany({
       include: {
         article_authors: true,
-        publication_article_publicationTopublication: true,
+        // publication_article_publicationTopublication: true,
         summary: true,
         polarization_bias: true,
         objectivity_bias: true,
@@ -82,11 +345,11 @@ app.get("/articles/:id", async (req, res) => {
   const { id } = req.params;
 
   try {
-    const article = await prisma.article.findUnique({
+    const article = await prismaLocalClient.article.findUnique({
       where: { id },
       include: {
         article_authors: true,
-        publication_article_publicationTopublication: true,
+        // article_publicationTopublication: true,
         summary: true,
         polarization_bias: true,
         objectivity_bias: true,
@@ -115,7 +378,7 @@ app.put("/articles/:id", async (req, res) => {
   } = req.body;
 
   try {
-    const article = await prisma.article.update({
+    const article = await prismaLocalClient.article.update({
       where: { id },
       data: {
         title,
@@ -146,7 +409,7 @@ app.delete("/articles/:id", async (req, res) => {
   const { id } = req.params;
 
   try {
-    await prisma.article.delete({
+    await prismaLocalClient.article.delete({
       where: { id },
     });
     res.json({ message: "Article deleted" });
@@ -156,123 +419,27 @@ app.delete("/articles/:id", async (req, res) => {
   }
 });
 
-app.post("/generate-summary", async (req, res) => {
-  const { articleContent } = req.body;
-  const requestPayload = buildRequestPayload(summaryPrompt);
-  try {
-    // Update the article content in the request payload
-    requestPayload.messages[0].content =
-      requestPayload.messages[0].content.replace(
-        articleContentReplace,
-        articleContent
-      );
+type PublicationMetadataRequestBody = {
+  hostname: string;
+};
 
-    const response = await gptApiCall(requestPayload);
-    const responseData = response.data.choices[0].message.content;
-
-    // Attempt to parse the JSON response
-    let jsonResponse;
+// Route to get publication metadata
+app.post(
+  "/get-publication-metadata",
+  async (
+    req: Request<{}, {}, PublicationMetadataRequestBody>,
+    res: Response
+  ) => {
+    const { hostname } = req.body;
     try {
-      jsonResponse = JSON.parse(responseData);
-    } catch (parseError) {
-      console.error("Error parsing summary JSON response:", parseError);
-      return res
-        .status(500)
-        .json({ error: "Error parsing summary JSON response" });
+      const metadata = await fetchPublicationMetadata(hostname);
+      res.json(metadata);
+    } catch (error) {
+      console.error("Error fetching publication metadata:", error);
+      res.status(500).json({ error: "Error fetching publication metadata" });
     }
-
-    // Validate the JSON structure
-    if (isSummaryResponse(jsonResponse)) {
-      return res.json(jsonResponse);
-    } else {
-      console.error("Invalid summary JSON structure:", jsonResponse);
-      return res.status(500).json({ error: "Invalid summary JSON structure" });
-    }
-  } catch (error) {
-    console.error("Error generating summary:", error);
-    return res.status(500).json({ error: "Error generating summary" });
   }
-});
-
-app.post("/analyze-political-bias", async (req, res) => {
-  const { articleContent } = req.body;
-  const requestPayload = buildRequestPayload(politicalBiasPrompt);
-  try {
-    // Update the article content in the request payload
-    requestPayload.messages[0].content =
-      requestPayload.messages[0].content.replace(
-        articleContentReplace,
-        articleContent
-      );
-
-    const response = await gptApiCall(requestPayload);
-    const responseData = response.data.choices[0].message.content;
-
-    // Attempt to parse the JSON response
-    let jsonResponse;
-    try {
-      jsonResponse = JSON.parse(responseData);
-    } catch (parseError) {
-      console.error("Error parsing political bias JSON response:", parseError);
-      return res
-        .status(500)
-        .json({ error: "Error parsing political bias JSON response" });
-    }
-
-    // Validate the JSON structure
-    if (isPoliticalBiasResponse(jsonResponse)) {
-      return res.json(jsonResponse);
-    } else {
-      console.error("Invalid political bias JSON structure:", jsonResponse);
-      return res
-        .status(500)
-        .json({ error: "Invalid political bias JSON structure" });
-    }
-  } catch (error) {
-    console.error("Error analyzing political bias:", error);
-    return res.status(500).json({ error: "Error analyzing political bias" });
-  }
-});
-
-app.post("/analyze-objectivity", async (req, res) => {
-  const { articleContent } = req.body;
-  const requestPayload = buildRequestPayload(objectivityPrompt);
-  try {
-    // Update the article content in the request payload
-    requestPayload.messages[0].content =
-      requestPayload.messages[0].content.replace(
-        articleContentReplace,
-        articleContent
-      );
-
-    const response = await gptApiCall(requestPayload);
-    const responseData = response.data.choices[0].message.content;
-
-    // Attempt to parse the JSON response
-    let jsonResponse;
-    try {
-      jsonResponse = JSON.parse(responseData);
-    } catch (parseError) {
-      console.error("Error parsing objectivity JSON response:", parseError);
-      return res
-        .status(500)
-        .json({ error: "Error parsing objectivity JSON response" });
-    }
-
-    // Validate the JSON structure
-    if (isObjectivityResponse(jsonResponse)) {
-      return res.json(jsonResponse);
-    } else {
-      console.error("Invalid objectivity JSON structure:", jsonResponse);
-      return res
-        .status(500)
-        .json({ error: "Invalid objectivity JSON structure" });
-    }
-  } catch (error) {
-    console.error("Error analyzing objectivity:", error);
-    return res.status(500).json({ error: "Error analyzing objectivity" });
-  }
-});
+);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

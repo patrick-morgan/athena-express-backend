@@ -3,24 +3,26 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 model article {
-  id                                           String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  created_at                                   DateTime?           @default(now()) @db.Timestamp(6)
-  updated_at                                   DateTime?           @default(now()) @db.Timestamp(6)
-  title                                        String              @db.VarChar(255)
-  subtitle                                     String?             @db.VarChar(255)
-  date                                         DateTime            @db.Timestamp(6)
-  text                                         String
-  publication                                  String              @db.Uuid
-  publication_article_publicationTopublication publication         @relation("article_publicationTopublication", fields: [publication], references: [id])
-  article_authors                              article_authors[]
-  objectivity_bias                             objectivity_bias[]
-  polarization_bias                            polarization_bias[]
-  summary                                      summary[]
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at        DateTime            @default(now()) @db.Timestamp(6)
+  updated_at        DateTime            @default(now()) @db.Timestamp(6)
+  url               String              @db.VarChar(255)
+  title             String              @db.VarChar(255)
+  subtitle          String?             @db.VarChar(255)
+  date              DateTime            @db.Timestamp(6)
+  text              String
+  publication       String              @db.Uuid
+  publicationObject publication         @relation("article_publicationTopublication", fields: [publication], references: [id])
+  article_authors   article_authors[]
+  objectivity_bias  objectivity_bias[]
+  polarization_bias polarization_bias[]
+  summary           summary[]
 }
 
 model article_authors {
@@ -33,52 +35,55 @@ model article_authors {
 }
 
 model journalist {
-  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  created_at      DateTime?         @default(now()) @db.Timestamp(6)
-  updated_at      DateTime?         @default(now()) @db.Timestamp(6)
-  name            String            @db.VarChar(255)
-  article_authors article_authors[]
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at        DateTime          @default(now()) @db.Timestamp(6)
+  updated_at        DateTime          @default(now()) @db.Timestamp(6)
+  name              String            @db.VarChar(255)
+  publication       String            @db.Uuid
+  publicationObject publication       @relation("journalists_to_publications", fields: [publication], references: [id])
+  article_authors   article_authors[]
 }
 
 model objectivity_bias {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  created_at     DateTime? @default(now()) @db.Timestamp(6)
-  updated_at     DateTime? @default(now()) @db.Timestamp(6)
-  article_id     String    @db.Uuid
-  rhetoric_score Decimal   @db.Decimal
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at     DateTime @default(now()) @db.Timestamp(6)
+  updated_at     DateTime @default(now()) @db.Timestamp(6)
+  article_id     String   @db.Uuid
+  rhetoric_score Decimal  @db.Decimal
   analysis       String
   footnotes      Json?
-  article        article   @relation(fields: [article_id], references: [id])
+  article        article  @relation(fields: [article_id], references: [id])
 }
 
 model polarization_bias {
-  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  created_at DateTime? @default(now()) @db.Timestamp(6)
-  updated_at DateTime? @default(now()) @db.Timestamp(6)
-  article_id String    @db.Uuid
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @default(now()) @db.Timestamp(6)
+  article_id String   @db.Uuid
   analysis   String
-  bias_score Decimal   @db.Decimal
+  bias_score Decimal  @db.Decimal
   footnotes  Json?
-  article    article   @relation(fields: [article_id], references: [id])
+  article    article  @relation(fields: [article_id], references: [id])
 }
 
 model publication {
-  id                                       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  created_at                               DateTime? @default(now()) @db.Timestamp(6)
-  updated_at                               DateTime? @default(now()) @db.Timestamp(6)
-  name                                     String    @db.VarChar(255)
-  date_founded                             DateTime  @db.Timestamp(6)
-  url                                      String    @db.VarChar(255)
-  owner                                    String?   @db.VarChar(255)
-  article_article_publicationTopublication article[] @relation("article_publicationTopublication")
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at   DateTime     @default(now()) @db.Timestamp(6)
+  updated_at   DateTime     @default(now()) @db.Timestamp(6)
+  name         String?      @db.VarChar(255)
+  date_founded DateTime?    @db.Timestamp(6)
+  hostname     String       @db.VarChar(255)
+  owner        String?      @db.VarChar(255)
+  articles     article[]    @relation("article_publicationTopublication")
+  journalists  journalist[] @relation("journalists_to_publications")
 }
 
 model summary {
-  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  created_at DateTime? @default(now()) @db.Timestamp(6)
-  updated_at DateTime? @default(now()) @db.Timestamp(6)
-  article_id String?   @db.Uuid
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @default(now()) @db.Timestamp(6)
   summary    String
   footnotes  Json?
-  article    article?  @relation(fields: [article_id], references: [id])
+  article_id String   @db.Uuid
+  article    article  @relation(fields: [article_id], references: [id])
 }

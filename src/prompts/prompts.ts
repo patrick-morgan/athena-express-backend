@@ -149,3 +149,43 @@ Analysis:
 
 Please analyze the rhetoric in the article based on the guidelines and example format provided above.
 `;
+
+type PublicationMetadataResponse = {
+  name: string | null;
+  date_founded: string | null;
+};
+
+export const isPublicationMetadataResponse = (
+  json: any
+): json is PublicationMetadataResponse => {
+  return (
+    typeof json === "object" &&
+    json !== null &&
+    typeof json.name === "string" &&
+    typeof json.date_founded === "string"
+  );
+};
+
+export const publicationMetadataPrompt = `
+Given the hostname of a news company (e.g., www.cnn.com), return a JSON object containing metadata information on the news company. The structure of the JSON object should be as follows:
+
+{
+  name: string, // human-friendly name (or what news company is commonly referred as)
+  date_founded: string // in format MM/DD/YYYY
+}
+
+For example, for "www.cnn.com" the correct response would be:
+
+{
+  name: "CNN",
+  date_founded: "06/01/1980"
+}
+
+If there is confusion or you cannot retrieve the proper human-readable name, please respond with "NULL" for the name field. If the date the news company was founded is not in your knowledge or is confusing/could have multiple interpretations, please also respond with "NULL" for the date_founded field.
+
+The accuracy of this information is important. It is better to respond with "NULL" than to provide a potentially incorrect answer.
+
+Please provide the JSON response for the following hostname:
+
+{hostname}
+`;
