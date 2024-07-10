@@ -5,7 +5,9 @@ import Decimal from "decimal.js";
 import bodyParser from "body-parser";
 import {
   JournalistAnalysisData,
+  PublicationAnalysisData,
   analyzeJournalistBias,
+  analyzePublicationBias,
   buildRequestPayload,
   cleanJSONString,
   gptApiCall,
@@ -132,6 +134,121 @@ app.post(
   }
 );
 
+type PublicationBiasPayload = {
+  publicationId: string;
+};
+
+// Create or get publication bias
+app.post(
+  "/analyze-publication",
+  async (req: Request<{}, {}, PublicationBiasPayload>, res: Response) => {
+    const { publicationId } = req.body;
+    const publication = await prismaLocalClient.publication.findFirst({
+      where: { id: publicationId },
+    });
+    if (!publication) {
+      return res.status(500).json({ error: "Publication not found" });
+    }
+    // article_ids publication has written
+    const articles = await prismaLocalClient.article.findMany({
+      where: { publication: publicationId },
+    });
+    // If publication bias already exists with same # articles analyzed, return it
+    const existingBias = await prismaLocalClient.publication_bias.findFirst({
+      where: {
+        publication: publicationId,
+        num_articles_analyzed: articles.length,
+      },
+    });
+    if (existingBias) {
+      console.info("Existing publication bias:", existingBias);
+      return res.json({
+        publication,
+        analysis: existingBias,
+      });
+    }
+    // Create publication bias
+    const articleIds = articles.map((article) => article.id);
+    const analysis: PublicationAnalysisData = {
+      averagePolarization: 0.5,
+      averageObjectivity: 0.5,
+      summaries: [],
+    };
+    const polarizationBiases =
+      await prismaLocalClient.polarization_bias.findMany({
+        where: { article_id: { in: articleIds } },
+      });
+
+    if (polarizationBiases.length > 0) {
+      let totalPolarizationBiasScore = new Decimal(0);
+      polarizationBiases.forEach((bias) => {
+        totalPolarizationBiasScore = totalPolarizationBiasScore.plus(
+          bias.bias_score
+        );
+      });
+      const averagePolarizationBiasScore = totalPolarizationBiasScore.dividedBy(
+        polarizationBiases.length
+      );
+      // Round to 1 decimal place
+      analysis["averagePolarization"] = parseFloat(
+        averagePolarizationBiasScore.toNumber().toFixed(1)
+      );
+    }
+
+    const objectivityBiases = await prismaLocalClient.objectivity_bias.findMany(
+      {
+        where: { article_id: { in: articleIds } },
+      }
+    );
+    if (objectivityBiases.length > 0) {
+      let totalObjectivityBiasScore = new Decimal(0);
+      objectivityBiases.forEach((bias) => {
+        totalObjectivityBiasScore = totalObjectivityBiasScore.plus(
+          bias.rhetoric_score
+        );
+      });
+      const averageObjectivityBiasScore = totalObjectivityBiasScore.dividedBy(
+        objectivityBiases.length
+      );
+      analysis["averageObjectivity"] = parseFloat(
+        averageObjectivityBiasScore.toNumber().toFixed(1)
+      );
+    }
+
+    // Take 10 most recent summaries
+    const summaries = await prismaLocalClient.summary.findMany({
+      where: { article_id: { in: articleIds } },
+      orderBy: {
+        created_at: "desc",
+      },
+      take: 10,
+    });
+    const summaryText: string[] = summaries.map((summary) => summary.summary);
+    analysis["summaries"] = summaryText;
+    console.info("Publication bias pre-analysis data struct", analysis);
+
+    // Get publication analysis
+    const publicationAnalysis = await analyzePublicationBias(analysis);
+    if (!publicationAnalysis) {
+      return res
+        .status(500)
+        .json({ error: "Error analyzing publication bias" });
+    }
+    // Construct new analysis
+    const newPublicationBias = await prismaLocalClient.publication_bias.create({
+      data: {
+        publication: publicationId,
+        num_articles_analyzed: articles.length,
+        rhetoric_score: analysis.averageObjectivity,
+        bias_score: analysis.averagePolarization,
+        summary: publicationAnalysis.analysis,
+      },
+    });
+    console.info("Created publication bias:", newPublicationBias);
+    res.json({ publication, analysis: newPublicationBias });
+  }
+);
+
 // Create or get journalists biases
 app.post(
   "/analyze-journalists",
@@ -168,7 +285,6 @@ app.post(
       if (existingBias) {
         console.info("Existing journalist bias:", existingBias);
         outJournalistBiases.push({ name: journalist.name, ...existingBias });
-        // return res.json([{ name: journalist.name, ...existingBias }]);
         continue;
       }
       // Create journalist bias
@@ -198,8 +314,9 @@ app.post(
         });
         const averagePolarizationBiasScore =
           totalPolarizationBiasScore.dividedBy(polarizationBiases.length);
-        analysis["averagePolarization"] =
-          averagePolarizationBiasScore.toNumber();
+        analysis["averagePolarization"] = parseFloat(
+          averagePolarizationBiasScore.toNumber().toFixed(1)
+        );
       }
 
       const objectivityBiases =
@@ -216,7 +333,9 @@ app.post(
         const averageObjectivityBiasScore = totalObjectivityBiasScore.dividedBy(
           objectivityBiases.length
         );
-        analysis["averageObjectivity"] = averageObjectivityBiasScore.toNumber();
+        analysis["averageObjectivity"] = parseFloat(
+          averageObjectivityBiasScore.toNumber().toFixed(1)
+        );
       }
 
       // Aggregate summaries of all articles this journalist has written
@@ -225,7 +344,7 @@ app.post(
       });
       const summaryText: string[] = summaries.map((summary) => summary.summary);
       analysis["summaries"] = summaryText;
-      console.info("Bias pre-analysis data struct", analysis);
+      console.info("Journalist bias pre-analysis data struct", analysis);
 
       // Get journalist analysis
       const journalistAnalysis = await analyzeJournalistBias(analysis);

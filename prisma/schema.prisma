@@ -52,10 +52,21 @@ model journalist_bias {
   summary               String
   bias_score            Decimal    @db.Decimal
   rhetoric_score        Decimal    @db.Decimal
-  // footnotes             Json
   num_articles_analyzed Int
   journalist            String     @db.Uuid
   journalistObject      journalist @relation(fields: [journalist], references: [id])
+}
+
+model publication_bias {
+  id                    String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at            DateTime    @default(now()) @db.Timestamp(6)
+  updated_at            DateTime    @default(now()) @db.Timestamp(6)
+  summary               String
+  bias_score            Decimal     @db.Decimal
+  rhetoric_score        Decimal     @db.Decimal
+  num_articles_analyzed Int
+  publication           String      @db.Uuid
+  publicationObject     publication @relation(fields: [publication], references: [id])
 }
 
 model objectivity_bias {
@@ -81,15 +92,16 @@ model polarization_bias {
 }
 
 model publication {
-  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  created_at   DateTime     @default(now()) @db.Timestamp(6)
-  updated_at   DateTime     @default(now()) @db.Timestamp(6)
-  name         String?      @db.VarChar(255)
-  date_founded DateTime?    @db.Timestamp(6)
-  hostname     String       @db.VarChar(255)
-  owner        String?      @db.VarChar(255)
-  articles     article[]    @relation("article_publicationTopublication")
-  journalists  journalist[] @relation("journalists_to_publications")
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at       DateTime           @default(now()) @db.Timestamp(6)
+  updated_at       DateTime           @default(now()) @db.Timestamp(6)
+  name             String?            @db.VarChar(255)
+  date_founded     DateTime?          @db.Timestamp(6)
+  hostname         String             @db.VarChar(255)
+  owner            String?            @db.VarChar(255)
+  articles         article[]          @relation("article_publicationTopublication")
+  journalists      journalist[]       @relation("journalists_to_publications")
+  publication_bias publication_bias[]
 }
 
 model summary {

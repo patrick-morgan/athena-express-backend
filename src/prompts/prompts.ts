@@ -1,4 +1,4 @@
-import { JournalistAnalysisData } from "./chatgpt";
+import { JournalistAnalysisData, PublicationAnalysisData } from "./chatgpt";
 
 export const articleContentReplace = "[Insert article content here]";
 
@@ -192,6 +192,20 @@ Please provide the JSON response for the following hostname:
 {hostname}
 `;
 
+export type JournalistAnalysisResponse = {
+  analysis: string;
+};
+
+export const isJournalistAnalysisResponse = (
+  json: any
+): json is JournalistAnalysisResponse => {
+  return (
+    typeof json === "object" &&
+    json !== null &&
+    typeof json.analysis === "string"
+  );
+};
+
 export const buildJournalistAnalysisPrompt = (data: JournalistAnalysisData) => {
   return `
 Given the following data about a journalist's articles, write a singular cohesive analysis on why the journalist is receiving their polarization and objectivity scores:
@@ -205,6 +219,39 @@ Given the following data about a journalist's articles, write a singular cohesiv
 In your analysis, include the following points:
 1. Explain the average polarization score and what it indicates about the journalist's writing.
 2. Explain the average objectivity score and what it indicates about the journalist's writing.
+3. Provide specific examples from the article summaries to support your analysis.
+
+Please return the analysis in the following JSON format without including any Markdown formatting or backticks, and ensure all newline characters within strings are properly escaped:
+
+{
+  "analysis": "string"
+}
+
+Please provide the analysis for the following data:
+
+{
+    "averagePolarization": ${data.averagePolarization},
+    "averageObjectivity": ${data.averageObjectivity},
+    "summaries": ${JSON.stringify(data.summaries)}
+}
+`;
+};
+
+export const buildPublicationAnalysisPrompt = (
+  data: PublicationAnalysisData
+) => {
+  return `
+Given the following data about a publication's articles, write a singular cohesive analysis on why the publication is receiving their polarization and objectivity scores:
+
+{
+    averagePolarization: number; // Score from 0 to 1 on how polarized the publication was in the articles they have published. 0 is very left wing and 1 is very right wing, 0.5 is moderate.
+    averageObjectivity: number;  // Score from 0 to 1 on how objective the publication was in the articles they have published. 0 means completely subjective (op-eds), 1 means objective.
+    summaries: string[]; // Summaries of all articles the publication has published
+}
+
+In your analysis, include the following points:
+1. Explain the average polarization score and what it indicates about the publication's articles.
+2. Explain the average objectivity score and what it indicates about the publication's articles.
 3. Provide specific examples from the article summaries to support your analysis.
 
 Please return the analysis in the following JSON format without including any Markdown formatting or backticks, and ensure all newline characters within strings are properly escaped:
