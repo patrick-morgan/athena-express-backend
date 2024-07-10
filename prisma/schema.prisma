@@ -42,6 +42,20 @@ model journalist {
   publication       String            @db.Uuid
   publicationObject publication       @relation("journalists_to_publications", fields: [publication], references: [id])
   article_authors   article_authors[]
+  journalist_bias   journalist_bias[]
+}
+
+model journalist_bias {
+  id                    String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at            DateTime   @default(now()) @db.Timestamp(6)
+  updated_at            DateTime   @default(now()) @db.Timestamp(6)
+  summary               String
+  bias_score            Decimal    @db.Decimal
+  rhetoric_score        Decimal    @db.Decimal
+  // footnotes             Json
+  num_articles_analyzed Int
+  journalist            String     @db.Uuid
+  journalistObject      journalist @relation(fields: [journalist], references: [id])
 }
 
 model objectivity_bias {
@@ -62,7 +76,7 @@ model polarization_bias {
   article_id String   @db.Uuid
   analysis   String
   bias_score Decimal  @db.Decimal
-  footnotes  Json?
+  footnotes  Json
   article    article  @relation(fields: [article_id], references: [id])
 }
 
@@ -83,7 +97,7 @@ model summary {
   created_at DateTime @default(now()) @db.Timestamp(6)
   updated_at DateTime @default(now()) @db.Timestamp(6)
   summary    String
-  footnotes  Json?
+  footnotes  Json
   article_id String   @db.Uuid
   article    article  @relation(fields: [article_id], references: [id])
 }

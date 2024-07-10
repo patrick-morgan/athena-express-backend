@@ -4,6 +4,7 @@ import {
   PoliticalBiasResponseType,
   SummaryResponseType,
   articleContentReplace,
+  buildJournalistAnalysisPrompt,
   isObjectivityResponse,
   isPoliticalBiasResponse,
   isSummaryResponse,
@@ -50,76 +51,79 @@ export const gptApiCall = async (requestPayload: RequestPayloadType) => {
   return response;
 };
 
-export const analyzePoliticalBias = async (
-  articleContent: string
-): Promise<PoliticalBiasResponseType | null> => {
-  const requestPayload = buildRequestPayload(politicalBiasPrompt);
-  try {
-    // Update the article content in the request payload
-    requestPayload.messages[0].content =
-      requestPayload.messages[0].content.replace(
-        articleContentReplace,
-        articleContent
-      );
-
-    const response = await gptApiCall(requestPayload);
-    const responseData = response.data.choices[0].message.content;
-
-    // Attempt to parse the JSON response
-    let jsonResponse: any;
-    try {
-      jsonResponse = JSON.parse(responseData);
-    } catch (parseError) {
-      console.error("Error parsing political bias JSON response:", parseError);
-      return null;
-    }
-
-    // Validate the JSON structure
-    if (isPoliticalBiasResponse(jsonResponse)) {
-      return jsonResponse;
-    } else {
-      console.error("Invalid political bias JSON structure:", jsonResponse);
-      return null;
-    }
-  } catch (error) {
-    console.error("Error analyzing political bias:", error);
-    return null;
-  }
+type JournalistAnalysisResponse = {
+  analysis: string;
 };
 
-export const analyzeObjectivity = async (
-  articleContent: string
-): Promise<ObjectivityBiasResponseType | null> => {
-  const requestPayload = buildRequestPayload(objectivityPrompt);
-  try {
-    // Update the article content in the request payload
-    requestPayload.messages[0].content =
-      requestPayload.messages[0].content.replace(
-        articleContentReplace,
-        articleContent
-      );
+const isJournalistAnalysisResponse = (
+  json: any
+): json is JournalistAnalysisResponse => {
+  return (
+    typeof json === "object" &&
+    json !== null &&
+    typeof json.analysis === "string"
+  );
+};
 
+export const cleanJSONString = (str: string): string => {
+  return str
+    .replace(/[\n\r\t]/g, "")
+    .replace(/\\n/g, "\\\\n")
+    .replace(/\\t/g, "\\\\t");
+};
+
+export type JournalistAnalysisData = {
+  averagePolarization: number;
+  averageObjectivity: number;
+  summaries: string[];
+};
+
+export const analyzeJournalistBias = async (
+  data: JournalistAnalysisData
+): Promise<JournalistAnalysisResponse | null> => {
+  const prompt = buildJournalistAnalysisPrompt(data);
+
+  const requestPayload = {
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "system",
+        content: prompt,
+      },
+    ],
+    temperature: 0,
+  };
+  try {
     const response = await gptApiCall(requestPayload);
-    const responseData = response.data.choices[0].message.content;
+    let responseData = response.data.choices[0].message.content;
+
+    // Clean the JSON string
+    responseData = cleanJSONString(responseData);
 
     // Attempt to parse the JSON response
     let jsonResponse: any;
     try {
       jsonResponse = JSON.parse(responseData);
     } catch (parseError) {
-      console.error("Error parsing objectivity JSON response:", parseError);
+      console.error(
+        "Error parsing journalist analysis JSON response:",
+        parseError
+      );
       return null;
     }
 
     // Validate the JSON structure
-    if (isObjectivityResponse(jsonResponse)) {
+    if (isJournalistAnalysisResponse(jsonResponse)) {
       return jsonResponse;
     } else {
-      console.error("Invalid objectivity JSON structure:", jsonResponse);
+      console.error(
+        "Invalid journalist analysis JSON structure:",
+        jsonResponse
+      );
       return null;
     }
   } catch (error) {
-    console.error("Error analyzing objectivity:", error);
+    console.error("Error analyzing journalist analysis:", error);
     return null;
   }
 };

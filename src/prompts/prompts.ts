@@ -1,3 +1,5 @@
+import { JournalistAnalysisData } from "./chatgpt";
+
 export const articleContentReplace = "[Insert article content here]";
 
 // This should ALWAYS match the output example in the summary prompt
@@ -189,3 +191,34 @@ Please provide the JSON response for the following hostname:
 
 {hostname}
 `;
+
+export const buildJournalistAnalysisPrompt = (data: JournalistAnalysisData) => {
+  return `
+Given the following data about a journalist's articles, write a singular cohesive analysis on why the journalist is receiving their polarization and objectivity scores:
+
+{
+    averagePolarization: number; // Score from 0 to 100 on how polarized the journalist was in the articles they have written. 0 is very left wing and 100 is very right wing, 50 is moderate.
+    averageObjectivity: number;  // Score from 0 to 100 on how objective a journalist was in the articles they have written. 0 means completely subjective (op-eds), 100 means objective.
+    summaries: string[]; // Summaries of all articles journalist has written
+}
+
+In your analysis, include the following points:
+1. Explain the average polarization score and what it indicates about the journalist's writing.
+2. Explain the average objectivity score and what it indicates about the journalist's writing.
+3. Provide specific examples from the article summaries to support your analysis.
+
+Please return the analysis in the following JSON format without including any Markdown formatting or backticks, and ensure all newline characters within strings are properly escaped:
+
+{
+  "analysis": "string"
+}
+
+Please provide the analysis for the following data:
+
+{
+    "averagePolarization": ${data.averagePolarization},
+    "averageObjectivity": ${data.averageObjectivity},
+    "summaries": ${JSON.stringify(data.summaries)}
+}
+`;
+};

@@ -1,8 +1,15 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
-import { PrismaClient, article } from "@prisma/client";
+import { PrismaClient, journalist, journalist_bias } from "@prisma/client";
+import Decimal from "decimal.js";
 import bodyParser from "body-parser";
-import { buildRequestPayload, gptApiCall } from "./prompts/chatgpt";
+import {
+  JournalistAnalysisData,
+  analyzeJournalistBias,
+  buildRequestPayload,
+  cleanJSONString,
+  gptApiCall,
+} from "./prompts/chatgpt";
 import {
   articleContentReplace,
   isObjectivityResponse,
@@ -66,7 +73,7 @@ app.post(
             // owner: metadata.owner,
           },
         });
-        console.log("Created publication:", publication);
+        console.info("Created publication:", publication);
       }
 
       let journalists = [];
@@ -75,7 +82,7 @@ app.post(
         let journalist = await prismaLocalClient.journalist.findFirst({
           where: { name: authors[i], publication: publication.id },
         });
-        console.log("Existing journalist:", journalist);
+        console.info("Existing journalist:", journalist);
         // If not found, create a new journalist
         if (!journalist) {
           journalist = await prismaLocalClient.journalist.create({
@@ -84,7 +91,7 @@ app.post(
               publication: publication.id,
             },
           });
-          console.log("Created journalist:", journalist);
+          console.info("Created journalist:", journalist);
         }
         journalists.push(journalist);
       }
@@ -116,12 +123,135 @@ app.post(
           },
         },
       });
-      console.log("Created article:", article);
+      console.info("Created article:", article);
       res.json(article);
     } catch (error) {
       console.error("Error creating article:", error);
       res.status(500).json({ error: "Error creating article" });
     }
+  }
+);
+
+// Create or get journalists biases
+app.post(
+  "/analyze-journalists",
+  async (req: Request<{}, {}, ArticleRequestBody>, res: Response) => {
+    const { title, subtitle, date, url, text, authors, hostname } = req.body;
+
+    const publication = await prismaLocalClient.publication.findFirst({
+      where: { hostname },
+    });
+    if (!publication) {
+      return res.status(500).json({ error: "Publication not found" });
+    }
+
+    type JournalistBiasWithName = journalist_bias & { name: string };
+    const outJournalistBiases: JournalistBiasWithName[] = [];
+
+    for (const author of authors) {
+      const journalist = await prismaLocalClient.journalist.findFirst({
+        where: { name: author, publication: publication.id },
+        include: { article_authors: true },
+      });
+      if (!journalist) {
+        return res.status(500).json({ error: "Journalist not found" });
+      }
+      // Number of articles this journalist has written
+      const numArticlesWritten = journalist.article_authors.length;
+      // Get bias if num articles written is same as what we have already analyzed (hence no changes to re-analyze)
+      const existingBias = await prismaLocalClient.journalist_bias.findFirst({
+        where: {
+          journalist: journalist.id,
+          num_articles_analyzed: numArticlesWritten,
+        },
+      });
+      if (existingBias) {
+        console.info("Existing journalist bias:", existingBias);
+        outJournalistBiases.push({ name: journalist.name, ...existingBias });
+        // return res.json([{ name: journalist.name, ...existingBias }]);
+        continue;
+      }
+      // Create journalist bias
+      // Aggregate all article_ids this journalist has written
+      const articleIds = journalist.article_authors.map(
+        (article) => article.article_id
+      );
+      // Average bias score of all articles this journalist has written
+      const analysis: JournalistAnalysisData = {
+        // journalist: journalist.id,
+        averagePolarization: 0.5,
+        averageObjectivity: 0.5,
+        summaries: [],
+      };
+
+      const polarizationBiases =
+        await prismaLocalClient.polarization_bias.findMany({
+          where: { article_id: { in: articleIds } },
+        });
+
+      if (polarizationBiases.length > 0) {
+        let totalPolarizationBiasScore = new Decimal(0);
+        polarizationBiases.forEach((bias) => {
+          totalPolarizationBiasScore = totalPolarizationBiasScore.plus(
+            bias.bias_score
+          );
+        });
+        const averagePolarizationBiasScore =
+          totalPolarizationBiasScore.dividedBy(polarizationBiases.length);
+        analysis["averagePolarization"] =
+          averagePolarizationBiasScore.toNumber();
+      }
+
+      const objectivityBiases =
+        await prismaLocalClient.objectivity_bias.findMany({
+          where: { article_id: { in: articleIds } },
+        });
+      if (objectivityBiases.length > 0) {
+        let totalObjectivityBiasScore = new Decimal(0);
+        objectivityBiases.forEach((bias) => {
+          totalObjectivityBiasScore = totalObjectivityBiasScore.plus(
+            bias.rhetoric_score
+          );
+        });
+        const averageObjectivityBiasScore = totalObjectivityBiasScore.dividedBy(
+          objectivityBiases.length
+        );
+        analysis["averageObjectivity"] = averageObjectivityBiasScore.toNumber();
+      }
+
+      // Aggregate summaries of all articles this journalist has written
+      const summaries = await prismaLocalClient.summary.findMany({
+        where: { article_id: { in: articleIds } },
+      });
+      const summaryText: string[] = summaries.map((summary) => summary.summary);
+      analysis["summaries"] = summaryText;
+      console.info("Bias pre-analysis data struct", analysis);
+
+      // Get journalist analysis
+      const journalistAnalysis = await analyzeJournalistBias(analysis);
+      if (!journalistAnalysis) {
+        return res
+          .status(500)
+          .json({ error: "Error analyzing journalist bias" });
+      }
+      // Construct new analysis
+      const newJournalistBias = await prismaLocalClient.journalist_bias.create({
+        data: {
+          journalist: journalist.id,
+          num_articles_analyzed: numArticlesWritten,
+          rhetoric_score: analysis.averageObjectivity,
+          bias_score: analysis.averagePolarization,
+          summary: journalistAnalysis.analysis,
+        },
+      });
+      console.info("Created journalist bias:", newJournalistBias);
+      outJournalistBiases.push({
+        name: journalist.name,
+        ...newJournalistBias,
+      });
+    }
+    console.info("Our journalist biases", outJournalistBiases);
+    res.json(outJournalistBiases);
   }
 );
 
@@ -134,7 +264,6 @@ app.post(
   "/generate-summary",
   async (req: Request<{}, {}, ArticlePayload>, res: Response) => {
     const { text, id: articleId } = req.body;
-    console.log("summary payload", req.body);
     const requestPayload = buildRequestPayload(summaryPrompt);
     try {
       // Get article summary if it exists
@@ -152,7 +281,11 @@ app.post(
         requestPayload.messages[0].content.replace(articleContentReplace, text);
 
       const response = await gptApiCall(requestPayload);
-      const responseData = response.data.choices[0].message.content;
+      let responseData = response.data.choices[0].message.content;
+      console.info("Summary LLM response:", responseData);
+
+      // Clean the JSON string
+      responseData = cleanJSONString(responseData);
 
       // Attempt to parse the JSON response
       let jsonResponse;
@@ -195,8 +328,6 @@ app.post(
   "/analyze-political-bias",
   async (req: Request<{}, {}, ArticlePayload>, res: Response) => {
     const { id: articleId, text } = req.body;
-    console.log("political bias payload", req.body);
-
     const requestPayload = buildRequestPayload(politicalBiasPrompt);
     try {
       // Get article political bias if it exists
@@ -214,7 +345,11 @@ app.post(
         requestPayload.messages[0].content.replace(articleContentReplace, text);
 
       const response = await gptApiCall(requestPayload);
-      const responseData = response.data.choices[0].message.content;
+      let responseData = response.data.choices[0].message.content;
+      console.info("Political bias LLM response:", responseData);
+
+      // Clean the JSON string
+      responseData = cleanJSONString(responseData);
 
       // Attempt to parse the JSON response
       let jsonResponse;
@@ -263,8 +398,6 @@ app.post(
   "/analyze-objectivity",
   async (req: Request<{}, {}, ArticlePayload>, res: Response) => {
     const { id: articleId, text } = req.body;
-    console.log("objectivity payload", req.body);
-
     const requestPayload = buildRequestPayload(objectivityPrompt);
     try {
       // Get article objectivity if it exists
@@ -281,7 +414,10 @@ app.post(
         requestPayload.messages[0].content.replace(articleContentReplace, text);
 
       const response = await gptApiCall(requestPayload);
-      const responseData = response.data.choices[0].message.content;
+      let responseData = response.data.choices[0].message.content;
+
+      // Clean the JSON string
+      responseData = cleanJSONString(responseData);
 
       // Attempt to parse the JSON response
       let jsonResponse;
@@ -443,5 +579,5 @@ app.post(
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.info(`Server is running on port ${PORT}`);
 });
