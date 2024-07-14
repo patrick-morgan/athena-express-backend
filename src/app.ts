@@ -24,7 +24,9 @@ import {
   summaryPrompt,
 } from "./prompts/prompts";
 import { fetchPublicationMetadata } from "./publication";
-
+import { getParser } from "./parsers/parsers";
+import { ArticleData } from "./types";
+import { getHostname } from "./parsers/helpers";
 export const prismaLocalClient = new PrismaClient();
 
 const app = express();
@@ -32,21 +34,34 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-type ArticleRequestBody = {
-  title: string;
-  date: string;
+// type ArticleRequestBody = {
+//   title: string;
+//   date: string;
+//   url: string;
+//   hostname: string;
+//   authors: string[];
+//   text: string;
+//   subtitle?: string;
+// };
+
+type CreateArticlePayload = {
   url: string;
-  hostname: string;
-  authors: string[];
-  text: string;
-  subtitle?: string;
+  html: string;
 };
 
 // Create or get article
 app.post(
   "/articles",
-  async (req: Request<{}, {}, ArticleRequestBody>, res: Response) => {
-    const { title, subtitle, date, url, text, authors, hostname } = req.body;
+  async (req: Request<{}, {}, CreateArticlePayload>, res: Response) => {
+    const { url, html } = req.body;
+    const parser = getParser(url, html);
+    const articleData: ArticleData = parser.parse();
+    const { title, subtitle, date, text, authors, hostname } = articleData;
+
+    if (!text) {
+      console.error("Error parsing article");
+      return res.status(500).json({ error: "Error parsing article" });
+    }
 
     try {
       // Get publication by hostname
@@ -249,11 +264,28 @@ app.post(
   }
 );
 
+type AnalyzeJournalistsPayload = {
+  articleId: string;
+};
 // Create or get journalists biases
 app.post(
   "/analyze-journalists",
-  async (req: Request<{}, {}, ArticleRequestBody>, res: Response) => {
-    const { title, subtitle, date, url, text, authors, hostname } = req.body;
+  async (req: Request<{}, {}, AnalyzeJournalistsPayload>, res: Response) => {
+    const { articleId } = req.body;
+    // Get article by id
+    const article = await prismaLocalClient.article.findFirst({
+      where: { id: articleId },
+      include: {
+        article_authors: true,
+      },
+    });
+    if (!article) {
+      console.error("Error analyzing journalists -- Article not found");
+      return res.status(500).json({ error: "Article not found" });
+    }
+    const { title, subtitle, date, url, text, article_authors } = article;
+    const hostname = getHostname(url);
+    const authors = article_authors.map((author) => author.journalist_id);
 
     const publication = await prismaLocalClient.publication.findFirst({
       where: { hostname },
@@ -265,9 +297,9 @@ app.post(
     type JournalistBiasWithName = journalist_bias & { name: string };
     const outJournalistBiases: JournalistBiasWithName[] = [];
 
-    for (const author of authors) {
+    for (const journalistId of authors) {
       const journalist = await prismaLocalClient.journalist.findFirst({
-        where: { name: author, publication: publication.id },
+        where: { id: journalistId },
         include: { article_authors: true },
       });
       if (!journalist) {

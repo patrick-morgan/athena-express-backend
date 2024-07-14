@@ -35,7 +35,7 @@ Guidelines for Summary:
 4. Conciseness: Keep the summary concise, ideally between 100-150 words.
 5. Footnotes: Use footnotes to provide direct references or quotes from the article.
 6. JSON Format: Ensure the output is in the following JSON format:
-
+   - Do not include any Markdown formatting or code blocks in the output.
 {
   "summary": "The article discusses the impact of climate change on coastal cities, noting that rising sea levels are leading to increased flooding[^1]. It examines the economic implications, highlighting the cost of infrastructure damage[^2]. Additionally, it addresses the challenges faced by local governments in mitigating these effects[^3].",
   "footnotes": {
@@ -86,6 +86,7 @@ Guidelines for Analysis:
 3. Key Evidence: Integrate significant evidence and examples directly within the analysis using footnotes for references.
 4. Neutral Tone: Maintain a neutral tone, avoiding any bias or subjective language.
 5. JSON Format: Ensure the output is in the following JSON format:
+   - Do not include any Markdown formatting or code blocks in the output.
 
 {
   "bias_score": 0,
@@ -137,6 +138,7 @@ Guidelines for Analysis:
 3. Key Evidence: Integrate significant evidence and examples directly within the analysis using footnotes for references.
 4. Neutral Tone: Maintain a neutral tone, avoiding any bias or subjective language.
 5. JSON Format: Ensure the output is in the following JSON format:
+   - Do not include any Markdown formatting or code blocks in the output.
 
 {
   "rhetoric_score": 0,
@@ -169,7 +171,7 @@ export const isPublicationMetadataResponse = (
 };
 
 export const publicationMetadataPrompt = `
-Given the hostname of a news company (e.g., www.cnn.com), return a JSON object containing metadata information on the news company. The structure of the JSON object should be as follows:
+Given the hostname of a news company (e.g., www.cnn.com), return a JSON object containing metadata information on the news company. Do not include any Markdown formattign or code blocks in the output. The structure of the JSON object should be as follows:
 
 {
   name: string, // human-friendly name (or what news company is commonly referred as)
