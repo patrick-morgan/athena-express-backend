@@ -17,11 +17,23 @@ export class CNNParser extends BaseParser {
    * @returns The authors of the article
    */
   getAuthors(): string[] {
-    const authors: string[] = [];
-    this.$(".byline__name").each((i, author) => {
-      authors.push(this.$(author).text().trim());
-    });
-    return authors;
+    const authorsSet = new Set<string>();
+    const bylineNames = this.$(".byline__name");
+    if (bylineNames.length) {
+      // Individual authors
+      this.$(".byline__name").each((i, author) => {
+        authorsSet.add(this.$(author).text().trim());
+      });
+    } else {
+      // Multiple authors listed as one (e.g. `By CNN Staff`)
+      this.$(".byline__names").each((i, author) => {
+        const text = this.$(author).text().trim();
+        // Remove the "By " prefix
+        const cleanedText = text.replace("By ", "");
+        authorsSet.add(cleanedText);
+      });
+    }
+    return Array.from(authorsSet);
   }
 
   /**
@@ -76,8 +88,6 @@ export class CNNParser extends BaseParser {
    * special cleaning for CNN hostname articles
    */
   cleanContent(): void {
-    super.cleanContent();
-
     // Remove add feedback containers
     this.$(".ad-feedback__moda").remove();
 
@@ -105,7 +115,8 @@ export class CNNParser extends BaseParser {
    * Parse the article and return the data
    * @returns The parsed article data
    */
-  parse(): ArticleData {
+  async parse(): Promise<ArticleData> {
+    this.cleanContent();
     return super.parse();
   }
 }

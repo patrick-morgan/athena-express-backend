@@ -1,6 +1,7 @@
 import { BaseParser } from "./BaseParser";
 import { CNNParser } from "./CNNParser";
 import { FoxParser } from "./FoxParser";
+import { SmartParser } from "./SmartParser";
 import { getHostname } from "./helpers";
 
 type ParserMapType = Record<string, typeof BaseParser>;
@@ -20,6 +21,6 @@ const parsers: ParserMapType = {
  */
 export const getParser = (url: string, html: string): BaseParser => {
   const hostname = getHostname(url);
-  const ParserClass = parsers[hostname] || BaseParser;
+  const ParserClass = parsers[hostname] || SmartParser;
   return new ParserClass(url, html);
 };

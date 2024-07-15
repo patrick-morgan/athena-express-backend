@@ -78,8 +78,6 @@ export class FoxParser extends BaseParser {
    * special cleaning for Fox News hostname articles
    */
   cleanContent(): void {
-    super.cleanContent();
-
     // For now assume the article content is going to be inside article tag
     // Clean article tags
     const $articles = this.$("article");
@@ -131,7 +129,8 @@ export class FoxParser extends BaseParser {
    * Parse the article and return the data
    * @returns The parsed article data
    */
-  parse(): ArticleData {
+  async parse(): Promise<ArticleData> {
+    this.cleanContent();
     return super.parse();
   }
 }

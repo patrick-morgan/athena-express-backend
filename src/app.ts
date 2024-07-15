@@ -1,8 +1,10 @@
-import express, { Request, Response } from "express";
-import cors from "cors";
-import { PrismaClient, journalist, journalist_bias } from "@prisma/client";
-import Decimal from "decimal.js";
+import { PrismaClient, journalist_bias } from "@prisma/client";
 import bodyParser from "body-parser";
+import cors from "cors";
+import Decimal from "decimal.js";
+import express, { Request, Response } from "express";
+import { getHostname } from "./parsers/helpers";
+import { getParser } from "./parsers/parsers";
 import {
   JournalistAnalysisData,
   PublicationAnalysisData,
@@ -16,33 +18,19 @@ import {
   articleContentReplace,
   isObjectivityResponse,
   isPoliticalBiasResponse,
-  isPublicationMetadataResponse,
   isSummaryResponse,
   objectivityPrompt,
   politicalBiasPrompt,
-  publicationMetadataPrompt,
   summaryPrompt,
 } from "./prompts/prompts";
 import { fetchPublicationMetadata } from "./publication";
-import { getParser } from "./parsers/parsers";
 import { ArticleData } from "./types";
-import { getHostname } from "./parsers/helpers";
 export const prismaLocalClient = new PrismaClient();
 
 const app = express();
 
 app.use(cors());
 app.use(bodyParser.json());
-
-// type ArticleRequestBody = {
-//   title: string;
-//   date: string;
-//   url: string;
-//   hostname: string;
-//   authors: string[];
-//   text: string;
-//   subtitle?: string;
-// };
 
 type CreateArticlePayload = {
   url: string;
@@ -55,8 +43,10 @@ app.post(
   async (req: Request<{}, {}, CreateArticlePayload>, res: Response) => {
     const { url, html } = req.body;
     const parser = getParser(url, html);
-    const articleData: ArticleData = parser.parse();
+    const articleData: ArticleData = await parser.parse();
     const { title, subtitle, date, text, authors, hostname } = articleData;
+    const journalists = [];
+    let outArticle = null;
 
     if (!text) {
       console.error("Error parsing article");
@@ -93,7 +83,6 @@ app.post(
         console.info("Created publication:", publication);
       }
 
-      let journalists = [];
       // Get journalists by name/publication
       for (let i = 0; i < authors.length; i++) {
         let journalist = await prismaLocalClient.journalist.findFirst({
@@ -114,34 +103,45 @@ app.post(
       }
 
       // Get article if it exists
-      let article = await prismaLocalClient.article.findFirst({
+      const existingArticle = await prismaLocalClient.article.findFirst({
         where: { url },
       });
-      if (article) {
-        console.info("Existing article:", article);
-        return res.json(article);
-      }
-      // Create article
-      article = await prismaLocalClient.article.create({
-        data: {
-          title,
-          subtitle,
-          date: new Date(date),
-          url,
-          text,
-          publication: publication.id,
-          // summary: { connect: { id: summaryId } },
-          // polarization_bias: { connect: { id: polarizationBiasId } },
-          // objectivity_bias: { connect: { id: objectivityBiasId } },
-          article_authors: {
-            create: journalists.map((journalist) => ({
-              journalist_id: journalist.id,
-            })),
+
+      if (existingArticle) {
+        console.info("Existing article:", existingArticle);
+        outArticle = existingArticle;
+      } else {
+        // Create article
+        const newArticle = await prismaLocalClient.article.create({
+          data: {
+            title,
+            subtitle,
+            date: new Date(date),
+            url,
+            text,
+            publication: publication.id,
+            // summary: { connect: { id: summaryId } },
+            // polarization_bias: { connect: { id: polarizationBiasId } },
+            // objectivity_bias: { connect: { id: objectivityBiasId } },
+            article_authors: {
+              create: journalists.map((journalist) => ({
+                journalist_id: journalist.id,
+              })),
+            },
           },
-        },
+          // include: {
+          //   article_authors: true,
+          // },
+        });
+        outArticle = newArticle;
+        console.info("Created article:", newArticle);
+      }
+
+      res.json({
+        article: outArticle,
+        publication,
+        journalists,
       });
-      console.info("Created article:", article);
-      res.json(article);
     } catch (error) {
       console.error("Error creating article:", error);
       res.status(500).json({ error: "Error creating article" });
@@ -401,7 +401,7 @@ app.post(
         ...newJournalistBias,
       });
     }
-    console.info("Our journalist biases", outJournalistBiases);
+    console.info("Out journalist biases", outJournalistBiases);
     res.json(outJournalistBiases);
   }
 );

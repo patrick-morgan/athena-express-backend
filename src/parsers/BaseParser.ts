@@ -1,5 +1,5 @@
 const cheerio = require("cheerio");
-import { getHostname } from "./helpers";
+import { chunkContent, getHostname } from "./helpers";
 import { ArticleData } from "../types";
 
 export class BaseParser {
@@ -19,10 +19,9 @@ export class BaseParser {
       // Get the title of the article
       const $title = this.$("title");
       const titleText = $title.contents().first().text();
-      console.log("title", titleText);
       return titleText;
     } catch (e) {
-      console.log("Error getting title", e);
+      console.error("Error getting title", e);
       return this.url;
     }
   }
@@ -64,39 +63,12 @@ export class BaseParser {
    * Removes any unwanted content from the article to prepare it for analysis
    */
   cleanContent(): void {
-    // Clean body so we can process article content
-    // const $body = this.$("body");
+    // Default implementation, should be overridden
+  }
 
-    // Remove class from body tag
-    // $body.removeClass();
-
-    // Remove scripts
-    this.$("script").remove();
-
-    // Remove meta tags
-    this.$("meta").remove();
-
-    // For now, remove links
-    this.$("link").remove();
-
-    // Remove styles
-    this.$("style").remove();
-
-    // Remove all img tags
-    this.$("img").remove();
-
-    // Remove picture tags
-    this.$("picture").remove();
-
-    // Remove source tags these seem to be garbage
-    this.$("source").remove();
-
-    // Remove img tags from em tags
-    const $ems = this.$("em");
-    $ems.each((i, em) => {
-      const $em = this.$(em);
-      $em.find("img").remove();
-    });
+  chunkHTML(): string[] {
+    const chunks = chunkContent(this.getHTML());
+    return chunks;
   }
 
   /**
@@ -121,15 +93,12 @@ export class BaseParser {
    * Parse the article and return the data
    * @returns The parsed article data
    */
-  parse(): ArticleData {
+  async parse(): Promise<ArticleData> {
     // Get properties before we clean
     const title = this.getTitle();
     const authors = this.getAuthors();
     const date = this.getDate();
     const hostname = getHostname(this.url);
-
-    // Clean out unwanted content and get article content
-    this.cleanContent();
     const content = this.getContent();
     const cleanedContent = this.postProcessContent(content);
 
