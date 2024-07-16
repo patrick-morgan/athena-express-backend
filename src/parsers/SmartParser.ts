@@ -1,7 +1,7 @@
 // import * as cheerio from "cheerio";
 // https://github.com/cheeriojs/cheerio/issues/1407
 const cheerio = require("cheerio");
-import { chunkContent, getHostname, parseDateString } from "./helpers";
+import { getHostname, parseDateString } from "./helpers";
 import { ArticleData } from "../types";
 import {
   HTMLParseResponse,
@@ -22,8 +22,20 @@ export class SmartParser extends BaseParser {
     return this.$.html();
   }
 
+  cleanContent(): void {
+    const $ = this.$;
+    // Remove all attributes from all elements
+    $("*").each(function (idx, elem) {
+      const attributes = $(elem).attr();
+      for (let attr in attributes) {
+        $(elem).removeAttr(attr);
+      }
+    });
+  }
+
   async smartParse(): Promise<HTMLParseResponse | null> {
-    // Chunk content
+    this.cleanContent();
+
     const chunks = super.chunkHTML();
 
     console.info("Chunks:", chunks);
