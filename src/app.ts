@@ -42,9 +42,40 @@ app.post(
   "/articles",
   async (req: Request<{}, {}, CreateArticlePayload>, res: Response) => {
     const { url, html } = req.body;
-    const parser = getParser(url, html);
-    const articleData: ArticleData = await parser.parse();
-    const { title, subtitle, date, text, authors, hostname } = articleData;
+
+    // Get article if it exists
+    const existingArticle = await prismaLocalClient.article.findFirst({
+      where: { url },
+      include: {
+        article_authors: true,
+      },
+    });
+
+    let title, subtitle, date, text, authors, hostname;
+    if (existingArticle) {
+      title = existingArticle.title;
+      subtitle = existingArticle.subtitle;
+      date = existingArticle.date;
+      text = existingArticle.text;
+      hostname = getHostname(url);
+      const author_ids = existingArticle.article_authors.map(
+        (author) => author.journalist_id
+      );
+      const authorObjects = await prismaLocalClient.journalist.findMany({
+        where: { id: { in: author_ids } },
+      });
+      authors = authorObjects.map((author) => author.name);
+    } else {
+      const parser = getParser(url, html);
+      const articleData: ArticleData = await parser.parse();
+      title = articleData.title;
+      subtitle = articleData.subtitle;
+      date = articleData.date;
+      text = articleData.text;
+      authors = articleData.authors;
+      hostname = articleData.hostname;
+    }
+
     const journalists = [];
     let outArticle = null;
 
@@ -101,11 +132,6 @@ app.post(
         }
         journalists.push(journalist);
       }
-
-      // Get article if it exists
-      const existingArticle = await prismaLocalClient.article.findFirst({
-        where: { url },
-      });
 
       if (existingArticle) {
         console.info("Existing article:", existingArticle);
