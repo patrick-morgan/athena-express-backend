@@ -2,7 +2,7 @@ import { PrismaClient, journalist_bias } from "@prisma/client";
 import bodyParser from "body-parser";
 import cors from "cors";
 import Decimal from "decimal.js";
-import express, { Request, Response } from "express";
+import express, { Request, Response, NextFunction } from "express";
 import { getHostname } from "./parsers/helpers";
 import { getParser } from "./parsers/parsers";
 import {
@@ -25,12 +25,347 @@ import {
 } from "./prompts/prompts";
 import { fetchPublicationMetadata } from "./publication";
 import { ArticleData } from "./types";
+import Stripe from "stripe";
+import admin, { auth } from "firebase-admin";
+import { DecodedIdToken } from "firebase-admin/auth";
+
+// Initialize Stripe
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "");
+
+// Initialize Firebase Admin SDK
+admin.initializeApp({
+  credential: admin.credential.cert({
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    privateKey: (process.env.FIREBASE_PRIVATE_KEY ?? "").replace(/\\n/g, "\n"),
+  }),
+});
+
 export const prismaLocalClient = new PrismaClient();
 
 const app = express();
 
-app.use(cors());
-app.use(bodyParser.json());
+const EXTENSION_ID = "bpanflelokmegihakihekhnmbghkpnoh";
+const corsOptions = {
+  origin: [
+    `chrome-extension://${EXTENSION_ID}`,
+    "http://localhost:3000", // For local development
+  ],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+// app.use(bodyParser.json());
+
+// Use JSON body parser for all routes except the webhook
+app.use((req, res, next) => {
+  if (req.originalUrl === "/stripe-webhook") {
+    next();
+  } else {
+    bodyParser.json()(req, res, next);
+  }
+});
+
+interface AuthenticatedRequest extends Request {
+  user?: DecodedIdToken;
+}
+
+// Middleware to verify Firebase token
+const verifyFirebaseToken = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).json({ error: "No token provided" });
+  }
+
+  const token = authHeader.split(" ")[1];
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    req.user = decodedToken;
+    next();
+  } catch (error) {
+    console.error("Error verifying Firebase token:", error);
+    res.status(401).json({ error: "Invalid token" });
+  }
+};
+
+// New route to check subscription status
+app.get(
+  "/check-subscription",
+  verifyFirebaseToken,
+  async (req: AuthenticatedRequest, res: Response) => {
+    const firebaseUserId = req.user?.uid;
+
+    if (!firebaseUserId) {
+      return res.status(400).json({ error: "User ID not found" });
+    }
+
+    console.log("firebase id");
+    console.log(firebaseUserId);
+    try {
+      const subscription = await prismaLocalClient.subscription.findUnique({
+        where: { firebaseUserId },
+      });
+
+      const isSubscribed = subscription && subscription.status === "active";
+      res.json({ isSubscribed });
+    } catch (error) {
+      console.error("Error checking subscription status:", error);
+      res.status(500).json({ error: "Error checking subscription status" });
+    }
+  }
+);
+
+app.post(
+  "/create-checkout-session",
+  verifyFirebaseToken,
+  async (req: AuthenticatedRequest, res: Response) => {
+    console.log("Request received for create-checkout-session");
+    console.log("User from token:", req.user);
+
+    const firebaseUserId = req.user?.uid;
+
+    if (!firebaseUserId) {
+      console.log("User ID not found in token");
+      return res.status(400).json({ error: "User ID not found" });
+    }
+
+    try {
+      console.log("Creating Stripe checkout session for user:", firebaseUserId);
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: "Athena AI Subscription",
+              },
+              unit_amount: 0, //500, // $5.00
+              recurring: {
+                interval: "month",
+              },
+            },
+            quantity: 1,
+          },
+        ],
+        mode: "subscription",
+        success_url: `https://${process.env.PEOPLES_PRESS_DOMAIN}/extension-redirect?status=success`,
+        cancel_url: `https://${process.env.PEOPLES_PRESS_DOMAIN}/extension-redirect?status=cancel`,
+        client_reference_id: firebaseUserId,
+      });
+
+      console.log("Checkout session created:", session.id);
+      res.json({ checkoutUrl: session.url });
+    } catch (error) {
+      console.error("Error creating checkout session:", error);
+      res.status(500).json({ error: "Error creating checkout session" });
+    }
+  }
+);
+
+// Webhook to handle Stripe events
+app.post(
+  "/stripe-webhook",
+  bodyParser.raw({ type: "application/json" }),
+  async (req: Request, res: Response) => {
+    console.log("Webhook received"); // Add this log
+    const sig = req.headers["stripe-signature"] as string | undefined;
+
+    let event: Stripe.Event;
+
+    try {
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        sig || "",
+        process.env.STRIPE_WEBHOOK_SECRET || ""
+      );
+    } catch (err) {
+      console.error(`Webhook Error: ${(err as Error).message}`);
+      return res.status(400).send(`Webhook Error: ${(err as Error).message}`);
+    }
+
+    console.log(`Received webhook event: ${event.type}`);
+
+    try {
+      switch (event.type) {
+        case "checkout.session.completed":
+          const session = event.data.object as Stripe.Checkout.Session;
+          if (session.client_reference_id) {
+            await handleSuccessfulSubscription(session.client_reference_id);
+            console.log(
+              `Subscription activated for user: ${session.client_reference_id}`
+            );
+          } else {
+            console.error("No client_reference_id found in session");
+          }
+          break;
+        case "customer.subscription.deleted":
+          const subscription = event.data.object as Stripe.Subscription;
+          if (subscription.customer) {
+            const customerId =
+              typeof subscription.customer === "string"
+                ? subscription.customer
+                : subscription.customer.id;
+            const customer = await stripe.customers.retrieve(customerId);
+            if ("deleted" in customer) {
+              console.error("Customer has been deleted");
+            } else if (customer.metadata && customer.metadata.firebaseUID) {
+              await handleCancelledSubscription(customer.metadata.firebaseUID);
+              console.log(
+                `Subscription cancelled for user: ${customer.metadata.firebaseUID}`
+              );
+            } else {
+              console.error("Firebase UID not found in customer metadata");
+            }
+          } else {
+            console.error("No customer found in subscription");
+          }
+          break;
+        default:
+          console.log(`Unhandled event type ${event.type}`);
+      }
+    } catch (error) {
+      console.error(`Error processing webhook event ${event.type}:`, error);
+      return res.status(500).json({ error: "Error processing webhook event" });
+    }
+
+    res.json({ received: true });
+  }
+);
+
+async function handleSuccessfulSubscription(
+  firebaseUserId: string
+): Promise<void> {
+  try {
+    await prismaLocalClient.subscription.upsert({
+      where: { firebaseUserId },
+      update: { status: "active", startDate: new Date() },
+      create: { firebaseUserId, status: "active", startDate: new Date() },
+    });
+  } catch (error) {
+    console.error("Error updating subscription status:", error);
+  }
+}
+
+async function handleCancelledSubscription(
+  firebaseUserId: string
+): Promise<void> {
+  try {
+    await prismaLocalClient.subscription.update({
+      where: { firebaseUserId },
+      data: { status: "cancelled", endDate: new Date() },
+    });
+  } catch (error) {
+    console.error("Error updating subscription status:", error);
+  }
+}
+
+// Cancel subscription
+app.post(
+  "/cancel-subscription",
+  verifyFirebaseToken,
+  async (req: AuthenticatedRequest, res: Response) => {
+    const firebaseUserId = req.user?.uid;
+
+    if (!firebaseUserId) {
+      return res.status(400).json({ error: "User ID not found" });
+    }
+
+    try {
+      const subscription = await prismaLocalClient.subscription.findUnique({
+        where: { firebaseUserId },
+      });
+
+      if (!subscription) {
+        return res.status(404).json({ error: "Subscription not found" });
+      }
+
+      // Fetch Stripe subscriptions for the customer
+      const stripeCustomer = await stripe.customers.list({
+        email: req.user?.email,
+        limit: 1,
+      });
+
+      if (stripeCustomer.data.length === 0) {
+        return res.status(404).json({ error: "Stripe customer not found" });
+      }
+
+      const stripeSubscriptions = await stripe.subscriptions.list({
+        customer: stripeCustomer.data[0].id,
+        status: "active",
+        limit: 1,
+      });
+
+      if (stripeSubscriptions.data.length === 0) {
+        return res
+          .status(404)
+          .json({ error: "Active Stripe subscription not found" });
+      }
+
+      // Cancel the subscription in Stripe
+      await stripe.subscriptions.cancel(stripeSubscriptions.data[0].id);
+
+      // Update the subscription status in your database
+      await prismaLocalClient.subscription.update({
+        where: { firebaseUserId },
+        data: { status: "cancelled", endDate: new Date() },
+      });
+
+      res.json({ message: "Subscription cancelled successfully" });
+    } catch (error) {
+      console.error("Error cancelling subscription:", error);
+      res.status(500).json({ error: "Error cancelling subscription" });
+    }
+  }
+);
+
+// Update payment method
+app.post(
+  "/update-payment-method",
+  verifyFirebaseToken,
+  async (req: AuthenticatedRequest, res: Response) => {
+    const firebaseUserId = req.user?.uid;
+
+    if (!firebaseUserId) {
+      return res.status(400).json({ error: "User ID not found" });
+    }
+
+    try {
+      const subscription = await prismaLocalClient.subscription.findUnique({
+        where: { firebaseUserId },
+      });
+
+      if (!subscription) {
+        return res.status(404).json({ error: "Subscription not found" });
+      }
+
+      // Fetch Stripe customer
+      const stripeCustomer = await stripe.customers.list({
+        email: req.user?.email,
+        limit: 1,
+      });
+
+      if (stripeCustomer.data.length === 0) {
+        return res.status(404).json({ error: "Stripe customer not found" });
+      }
+
+      // Create a SetupIntent
+      const setupIntent = await stripe.setupIntents.create({
+        customer: stripeCustomer.data[0].id,
+        payment_method_types: ["card"],
+      });
+
+      res.json({ clientSecret: setupIntent.client_secret });
+    } catch (error) {
+      console.error("Error updating payment method:", error);
+      res.status(500).json({ error: "Error updating payment method" });
+    }
+  }
+);
 
 type CreateArticlePayload = {
   url: string;
@@ -753,6 +1088,16 @@ app.post(
     }
   }
 );
+
+app.get("/test", (req, res) => {
+  res.send("Express server is running");
+});
+
+// Catch-all route for debugging
+app.use("*", (req, res) => {
+  console.log(`Received request for ${req.originalUrl}`);
+  res.status(404).send("Not Found");
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
