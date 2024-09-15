@@ -28,9 +28,11 @@ import { ArticleData } from "./types";
 import Stripe from "stripe";
 import admin, { auth } from "firebase-admin";
 import { DecodedIdToken } from "firebase-admin/auth";
+import NodeCache from "node-cache";
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "");
+const cache = new NodeCache({ stdTTL: 300 }); // Cache for 5 minutes
 
 // Initialize Firebase Admin SDK
 admin.initializeApp({
@@ -93,27 +95,84 @@ const verifyFirebaseToken = async (
 };
 
 // New route to check subscription status
+// app.get(
+//   "/check-subscription",
+//   verifyFirebaseToken,
+//   async (req: AuthenticatedRequest, res: Response) => {
+//     const firebaseUserId = req.user?.uid;
+
+//     if (!firebaseUserId) {
+//       return res.status(400).json({ error: "User ID not found" });
+//     }
+
+//     console.log("firebase id");
+//     console.log(firebaseUserId);
+//     try {
+//       const subscription = await prismaLocalClient.subscription.findUnique({
+//         where: { firebaseUserId },
+//       });
+
+//       const isSubscribed = subscription && subscription.status === "active";
+//       res.json({ isSubscribed });
+//     } catch (error) {
+//       console.error("Error checking subscription status:", error);
+//       res.status(500).json({ error: "Error checking subscription status" });
+//     }
+//   }
+// );
+
 app.get(
   "/check-subscription",
   verifyFirebaseToken,
   async (req: AuthenticatedRequest, res: Response) => {
-    const firebaseUserId = req.user?.uid;
+    const userId = req.user?.uid;
 
-    if (!firebaseUserId) {
-      return res.status(400).json({ error: "User ID not found" });
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
 
-    console.log("firebase id");
-    console.log(firebaseUserId);
     try {
-      const subscription = await prismaLocalClient.subscription.findUnique({
-        where: { firebaseUserId },
+      // Check cache first
+      const cachedStatus = cache.get<boolean>(userId);
+      console.log("chached status", cachedStatus);
+      if (cachedStatus !== undefined) {
+        return res.json({ isSubscribed: cachedStatus });
+      }
+
+      const userEmail = req.user?.email;
+
+      if (!userEmail) {
+        return res.status(400).json({ error: "User email not found" });
+      }
+
+      const customers = await stripe.customers.list({
+        email: userEmail,
+        limit: 1,
       });
 
-      const isSubscribed = subscription && subscription.status === "active";
+      console.log("cuistomers", customers);
+      if (customers.data.length === 0) {
+        cache.set(userId, false);
+        return res.json({ isSubscribed: false });
+      }
+
+      const customer = customers.data[0];
+      const subscriptions = await stripe.subscriptions.list({
+        customer: customer.id,
+        status: "active",
+      });
+      console.log("subs", subscriptions);
+
+      const isSubscribed = subscriptions.data.length > 0;
+
+      // Cache the result
+      console.log("user id", userId);
+      console.log("isSubsed", isSubscribed);
+      cache.set(userId, isSubscribed);
+
       res.json({ isSubscribed });
     } catch (error) {
-      console.error("Error checking subscription status:", error);
+      console.error("Error checking subscription:", error);
       res.status(500).json({ error: "Error checking subscription status" });
     }
   }
