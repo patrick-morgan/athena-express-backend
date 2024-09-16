@@ -98,6 +98,7 @@ app.get(
   "/check-subscription",
   verifyFirebaseToken,
   async (req: AuthenticatedRequest, res: Response) => {
+    console.info("Check subscription request received");
     const userId = req.user?.uid;
     const userEmail = req.user?.email;
 
