@@ -94,80 +94,51 @@ const verifyFirebaseToken = async (
   }
 };
 
-// New route to check subscription status
-// app.get(
-//   "/check-subscription",
-//   verifyFirebaseToken,
-//   async (req: AuthenticatedRequest, res: Response) => {
-//     const firebaseUserId = req.user?.uid;
-
-//     if (!firebaseUserId) {
-//       return res.status(400).json({ error: "User ID not found" });
-//     }
-
-//     console.log("firebase id");
-//     console.log(firebaseUserId);
-//     try {
-//       const subscription = await prismaLocalClient.subscription.findUnique({
-//         where: { firebaseUserId },
-//       });
-
-//       const isSubscribed = subscription && subscription.status === "active";
-//       res.json({ isSubscribed });
-//     } catch (error) {
-//       console.error("Error checking subscription status:", error);
-//       res.status(500).json({ error: "Error checking subscription status" });
-//     }
-//   }
-// );
-
 app.get(
   "/check-subscription",
   verifyFirebaseToken,
   async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.uid;
+    const userEmail = req.user?.email;
 
-    if (!userId) {
+    console.info(
+      `Checking subscription for User ID ${userId}, email ${userEmail}`
+    );
+
+    if (!userId || !userEmail) {
+      console.info("User ID or email not found in token");
       return res.status(401).json({ error: "Unauthorized" });
     }
 
     try {
       // Check cache first
       const cachedStatus = cache.get<boolean>(userId);
-      console.log("chached status", cachedStatus);
+      console.info("Cached status:", cachedStatus);
       if (cachedStatus !== undefined) {
         return res.json({ isSubscribed: cachedStatus });
       }
 
-      const userEmail = req.user?.email;
-
-      if (!userEmail) {
-        return res.status(400).json({ error: "User email not found" });
-      }
-
-      const customers = await stripe.customers.list({
+      // If not in cache, check with Stripe
+      const customer = await stripe.customers.list({
         email: userEmail,
         limit: 1,
       });
+      console.info("Customer:", customer);
 
-      console.log("cuistomers", customers);
-      if (customers.data.length === 0) {
+      if (customer.data.length === 0) {
         cache.set(userId, false);
         return res.json({ isSubscribed: false });
       }
 
-      const customer = customers.data[0];
       const subscriptions = await stripe.subscriptions.list({
-        customer: customer.id,
+        customer: customer.data[0].id,
         status: "active",
       });
-      console.log("subs", subscriptions);
 
       const isSubscribed = subscriptions.data.length > 0;
+      console.info("Is subscribed:", isSubscribed);
 
-      // Cache the result
-      console.log("user id", userId);
-      console.log("isSubsed", isSubscribed);
+      // Update cache
       cache.set(userId, isSubscribed);
 
       res.json({ isSubscribed });
@@ -182,18 +153,21 @@ app.post(
   "/create-checkout-session",
   verifyFirebaseToken,
   async (req: AuthenticatedRequest, res: Response) => {
-    console.log("Request received for create-checkout-session");
-    console.log("User from token:", req.user);
+    console.info("Request received for create-checkout-session");
+    console.info("User from token:", req.user);
 
     const firebaseUserId = req.user?.uid;
 
     if (!firebaseUserId) {
-      console.log("User ID not found in token");
+      console.info("User ID not found in token");
       return res.status(400).json({ error: "User ID not found" });
     }
 
     try {
-      console.log("Creating Stripe checkout session for user:", firebaseUserId);
+      console.info(
+        "Creating Stripe checkout session for user:",
+        firebaseUserId
+      );
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card"],
         line_items: [
@@ -217,7 +191,7 @@ app.post(
         client_reference_id: firebaseUserId,
       });
 
-      console.log("Checkout session created:", session.id);
+      console.info("Checkout session created:", session.id);
       res.json({ checkoutUrl: session.url });
     } catch (error) {
       console.error("Error creating checkout session:", error);
@@ -231,7 +205,7 @@ app.post(
   "/stripe-webhook",
   bodyParser.raw({ type: "application/json" }),
   async (req: Request, res: Response) => {
-    console.log("Webhook received"); // Add this log
+    console.info("Webhook request received", req.body);
     const sig = req.headers["stripe-signature"] as string | undefined;
 
     let event: Stripe.Event;
@@ -247,81 +221,142 @@ app.post(
       return res.status(400).send(`Webhook Error: ${(err as Error).message}`);
     }
 
-    console.log(`Received webhook event: ${event.type}`);
+    console.info(`Received webhook event: ${event.type}`);
 
-    try {
-      switch (event.type) {
-        case "checkout.session.completed":
-          const session = event.data.object as Stripe.Checkout.Session;
-          if (session.client_reference_id) {
-            await handleSuccessfulSubscription(session.client_reference_id);
-            console.log(
-              `Subscription activated for user: ${session.client_reference_id}`
-            );
-          } else {
-            console.error("No client_reference_id found in session");
-          }
-          break;
-        case "customer.subscription.deleted":
-          const subscription = event.data.object as Stripe.Subscription;
-          if (subscription.customer) {
-            const customerId =
-              typeof subscription.customer === "string"
-                ? subscription.customer
-                : subscription.customer.id;
-            const customer = await stripe.customers.retrieve(customerId);
-            if ("deleted" in customer) {
-              console.error("Customer has been deleted");
-            } else if (customer.metadata && customer.metadata.firebaseUID) {
-              await handleCancelledSubscription(customer.metadata.firebaseUID);
-              console.log(
-                `Subscription cancelled for user: ${customer.metadata.firebaseUID}`
-              );
-            } else {
-              console.error("Firebase UID not found in customer metadata");
-            }
-          } else {
-            console.error("No customer found in subscription");
-          }
-          break;
-        default:
-          console.log(`Unhandled event type ${event.type}`);
-      }
-    } catch (error) {
-      console.error(`Error processing webhook event ${event.type}:`, error);
-      return res.status(500).json({ error: "Error processing webhook event" });
+    switch (event.type) {
+      case "customer.subscription.created":
+      case "customer.subscription.updated":
+      case "customer.subscription.deleted":
+        const subscription = event.data.object as Stripe.Subscription;
+        await handleSubscriptionChange(subscription);
+        break;
+      // ... handle other event types as needed
     }
 
     res.json({ received: true });
+
+    // try {
+    //   switch (event.type) {
+    //     case "checkout.session.completed":
+    //       const session = event.data.object as Stripe.Checkout.Session;
+    //       if (session.client_reference_id) {
+    //         await handleSuccessfulSubscription(session.client_reference_id);
+    //         console.log(
+    //           `Subscription activated for user: ${session.client_reference_id}`
+    //         );
+    //       } else {
+    //         console.error("No client_reference_id found in session");
+    //       }
+    //       break;
+    //     case "customer.subscription.deleted":
+    //       const subscription = event.data.object as Stripe.Subscription;
+    //       if (subscription.customer) {
+    //         const customerId =
+    //           typeof subscription.customer === "string"
+    //             ? subscription.customer
+    //             : subscription.customer.id;
+    //         const customer = await stripe.customers.retrieve(customerId);
+    //         if ("deleted" in customer) {
+    //           console.error("Customer has been deleted");
+    //         } else if (customer.metadata && customer.metadata.firebaseUID) {
+    //           await handleCancelledSubscription(customer.metadata.firebaseUID);
+    //           console.log(
+    //             `Subscription cancelled for user: ${customer.metadata.firebaseUID}`
+    //           );
+    //         } else {
+    //           console.error("Firebase UID not found in customer metadata");
+    //         }
+    //       } else {
+    //         console.error("No customer found in subscription");
+    //       }
+    //       break;
+    //     default:
+    //       console.log(`Unhandled event type ${event.type}`);
+    //   }
+    // } catch (error) {
+    //   console.error(`Error processing webhook event ${event.type}:`, error);
+    //   return res.status(500).json({ error: "Error processing webhook event" });
+    // }
+
+    // res.json({ received: true });
   }
 );
 
-async function handleSuccessfulSubscription(
-  firebaseUserId: string
-): Promise<void> {
-  try {
-    await prismaLocalClient.subscription.upsert({
-      where: { firebaseUserId },
-      update: { status: "active", startDate: new Date() },
-      create: { firebaseUserId, status: "active", startDate: new Date() },
-    });
-  } catch (error) {
-    console.error("Error updating subscription status:", error);
+async function handleSubscriptionChange(subscription: Stripe.Subscription) {
+  const customerId = subscription.customer as string;
+  console.info(
+    `Handling subscription change for stripe customerId ${customerId}`
+  );
+  const customer = await stripe.customers.retrieve(customerId);
+
+  if (customer.deleted) {
+    console.error("Customer has been deleted");
+    return;
   }
+
+  const firebaseUid = customer.metadata.firebaseUID;
+  if (!firebaseUid) {
+    console.error("Firebase UID not found in customer metadata");
+    return;
+  }
+
+  const isActive = subscription.status === "active";
+
+  // Update cache
+  cache.set(firebaseUid, isActive);
+
+  // Optionally, update your database here if you're still maintaining a local subscription table
+  // await updateDatabaseSubscription(firebaseUid, isActive, subscription);
+
+  console.info(
+    `Updated subscription status for user ${firebaseUid}: ${isActive}`
+  );
 }
 
-async function handleCancelledSubscription(
-  firebaseUserId: string
-): Promise<void> {
-  try {
-    await prismaLocalClient.subscription.update({
-      where: { firebaseUserId },
-      data: { status: "cancelled", endDate: new Date() },
-    });
-  } catch (error) {
-    console.error("Error updating subscription status:", error);
-  }
-}
+// Optional: Update database function if you're maintaining a local subscription table
+// async function updateDatabaseSubscription(userId: string, isActive: boolean, subscription: Stripe.Subscription) {
+//   // Implement your database update logic here
+//   // For example, using Prisma:
+//   // await prisma.subscription.upsert({
+//   //   where: { userId },
+//   //   update: {
+//   //     status: isActive ? 'active' : 'inactive',
+//   //     currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+//   //   },
+//   //   create: {
+//   //     userId,
+//   //     status: isActive ? 'active' : 'inactive',
+//   //     currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+//   //   },
+//   // });
+// }
+
+// async function handleSuccessfulSubscription(
+//   firebaseUserId: string
+// ): Promise<void> {
+//   try {
+//     await prismaLocalClient.subscription.upsert({
+//       where: { firebaseUserId },
+//       update: { status: "active", startDate: new Date() },
+//       create: { firebaseUserId, status: "active", startDate: new Date() },
+//     });
+//   } catch (error) {
+//     console.error("Error updating subscription status:", error);
+//   }
+// }
+
+// async function handleCancelledSubscription(
+//   firebaseUserId: string
+// ): Promise<void> {
+//   try {
+//     await prismaLocalClient.subscription.update({
+//       where: { firebaseUserId },
+//       data: { status: "cancelled", endDate: new Date() },
+//     });
+//   } catch (error) {
+//     console.error("Error updating subscription status:", error);
+//   }
+// }
 
 // Cancel subscription
 app.post(
@@ -1148,13 +1183,9 @@ app.post(
   }
 );
 
-app.get("/test", (req, res) => {
-  res.send("Express server is running");
-});
-
 // Catch-all route for debugging
 app.use("*", (req, res) => {
-  console.log(`Received request for ${req.originalUrl}`);
+  console.info(`Received request for ${req.originalUrl}`);
   res.status(404).send("Not Found");
 });
 
