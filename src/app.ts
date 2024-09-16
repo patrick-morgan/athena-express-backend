@@ -2,7 +2,11 @@ import { PrismaClient, journalist_bias } from "@prisma/client";
 import bodyParser from "body-parser";
 import cors from "cors";
 import Decimal from "decimal.js";
-import express, { Request, Response, NextFunction } from "express";
+import express, { NextFunction, Request, Response } from "express";
+import admin from "firebase-admin";
+import { DecodedIdToken } from "firebase-admin/auth";
+import NodeCache from "node-cache";
+import Stripe from "stripe";
 import { getHostname } from "./parsers/helpers";
 import { getParser } from "./parsers/parsers";
 import {
@@ -25,10 +29,6 @@ import {
 } from "./prompts/prompts";
 import { fetchPublicationMetadata } from "./publication";
 import { ArticleData } from "./types";
-import Stripe from "stripe";
-import admin, { auth } from "firebase-admin";
-import { DecodedIdToken } from "firebase-admin/auth";
-import NodeCache from "node-cache";
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "");
