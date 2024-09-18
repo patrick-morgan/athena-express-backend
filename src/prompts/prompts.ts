@@ -75,7 +75,7 @@ export const isPoliticalBiasResponse = (
 };
 
 export const politicalBiasPrompt = `
-Objective: Analyze the given news article for political bias and generate a bias score from 0 to 100 where 0 is very left wing, 50 is moderate, and 100 is very right wing. Provide specific examples from the article that illustrate the bias, using footnotes for references. If the article does not appear to be a news article or a political bias score is not relevant for the content, reply with "NULL" for the bias_score, provide a reason why in the analysis section, and respond with an empty object {} for footnotes. The output should be in JSON format.
+Objective: Analyze the given news article for political bias and generate a bias score from 0 to 100 where 0 is very left wing, 50 is moderate, and 100 is very right wing. Provide specific examples from the article that illustrate the bias, using footnotes for references. If the article does not appear to be a news article or a political bias score is not relevant for the content, reply with 50 for the bias_score, provide a reason why in the analysis section, and respond with an empty object {} for footnotes. The output should be in JSON format.
 
 Article Content:
 ${articleContentReplace}
@@ -128,7 +128,7 @@ export const isObjectivityResponse = (
 };
 
 export const objectivityPrompt = `
-Objective: Analyze the given news article to determine how opinionated/persuasive it is versus how factual/objective it is. Generate a score from 0 to 100 where 0 is very opinionated/rhetorical (think op-ed piece) and 100 is very factual/objective (think only the facts). Provide specific examples from the article that illustrate the level of opinionation or factuality, using footnotes for references. If the article does not appear to be a news article or a objectivity score is not relevant for the content, reply with "NULL" for the rhetoric_score, provide a reason why in the analysis section, and respond with an empty object {} for footnotes. The output should be in JSON format.
+Objective: Analyze the given news article to determine how opinionated/persuasive it is versus how factual/objective it is. Generate a score from 0 to 100 where 0 is very opinionated/rhetorical (think op-ed piece) and 100 is very factual/objective (think only the facts). Provide specific examples from the article that illustrate the level of opinionation or factuality, using footnotes for references. If the article does not appear to be a news article or a objectivity score is not relevant for the content, reply with either 0 or 100 for the rhetoric_score, provide a reason why in the analysis section, and respond with an empty object {} for footnotes. The output should be in JSON format.
 
 Article Content:
 ${articleContentReplace}
