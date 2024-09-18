@@ -5,7 +5,7 @@ import Decimal from "decimal.js";
 import express, { NextFunction, Request, Response } from "express";
 import admin from "firebase-admin";
 import { DecodedIdToken } from "firebase-admin/auth";
-import NodeCache from "node-cache";
+// import NodeCache from "node-cache";
 import Stripe from "stripe";
 import { getHostname } from "./parsers/helpers";
 import { getParser } from "./parsers/parsers";
@@ -32,7 +32,7 @@ import { ArticleData } from "./types";
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "");
-const cache = new NodeCache({ stdTTL: 300 }); // Cache for 5 minutes
+// const cache = new NodeCache({ stdTTL: 300 }); // Cache for 5 minutes
 
 // Initialize Firebase Admin SDK
 admin.initializeApp({
@@ -113,11 +113,11 @@ app.get(
 
     try {
       // Check cache first
-      const cachedStatus = cache.get<boolean>(userId);
-      console.info("Cached status:", cachedStatus);
-      if (cachedStatus !== undefined) {
-        return res.json({ isSubscribed: cachedStatus });
-      }
+      // const cachedStatus = cache.get<boolean>(userId);
+      // console.info("Cached status:", cachedStatus);
+      // if (cachedStatus !== undefined) {
+      //   return res.json({ isSubscribed: cachedStatus });
+      // }
 
       // If not in cache, check with Stripe
       const customer = await stripe.customers.list({
@@ -127,7 +127,7 @@ app.get(
       console.info("Customer:", customer);
 
       if (customer.data.length === 0) {
-        cache.set(userId, false);
+        // cache.set(userId, false);
         return res.json({ isSubscribed: false });
       }
 
@@ -140,7 +140,7 @@ app.get(
       console.info("Is subscribed:", isSubscribed);
 
       // Update cache
-      cache.set(userId, isSubscribed);
+      // cache.set(userId, isSubscribed);
 
       res.json({ isSubscribed });
     } catch (error) {
@@ -342,7 +342,7 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
   const isActive = subscription.status === "active";
 
   // Update cache
-  cache.set(firebaseUid, isActive);
+  // cache.set(firebaseUid, isActive);
 
   // Optionally, update your database here if you're still maintaining a local subscription table
   // await updateDatabaseSubscription(firebaseUid, isActive, subscription);
