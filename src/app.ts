@@ -150,6 +150,33 @@ app.get(
   }
 );
 
+// Helper function to get or create a Stripe customer
+async function getOrCreateStripeCustomer(
+  firebaseUserId: string,
+  email: string
+) {
+  let customer;
+  const customers = await stripe.customers.list({ email: email, limit: 1 });
+
+  if (customers.data.length > 0) {
+    customer = customers.data[0];
+    // Update the customer with Firebase UID if it's not already there
+    if (!customer.metadata.firebaseUID) {
+      customer = await stripe.customers.update(customer.id, {
+        metadata: { firebaseUID: firebaseUserId },
+      });
+    }
+  } else {
+    // Create a new customer with Firebase UID in metadata
+    customer = await stripe.customers.create({
+      email: email,
+      metadata: { firebaseUID: firebaseUserId },
+    });
+  }
+
+  return customer;
+}
+
 app.post(
   "/create-checkout-session",
   verifyFirebaseToken,
@@ -158,10 +185,11 @@ app.post(
     console.info("User from token:", req.user);
 
     const firebaseUserId = req.user?.uid;
+    const userEmail = req.user?.email;
 
-    if (!firebaseUserId) {
-      console.info("User ID not found in token");
-      return res.status(400).json({ error: "User ID not found" });
+    if (!firebaseUserId || !userEmail) {
+      console.info("User ID or email not found in token");
+      return res.status(400).json({ error: "User ID or email not found" });
     }
 
     try {
@@ -169,7 +197,15 @@ app.post(
         "Creating Stripe checkout session for user:",
         firebaseUserId
       );
+
+      // Get or create a Stripe customer
+      const customer = await getOrCreateStripeCustomer(
+        firebaseUserId,
+        userEmail
+      );
+
       const session = await stripe.checkout.sessions.create({
+        customer: customer.id,
         payment_method_types: ["card"],
         line_items: [
           {
@@ -225,10 +261,12 @@ app.post(
     console.info(`Received webhook event: ${event.type}`);
 
     switch (event.type) {
+      case "checkout.session.completed":
       case "customer.subscription.created":
       case "customer.subscription.updated":
       case "customer.subscription.deleted":
         const subscription = event.data.object as Stripe.Subscription;
+        console.info("Received subscription", subscription);
         await handleSubscriptionChange(subscription);
         break;
       // ... handle other event types as needed
@@ -314,51 +352,6 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
   );
 }
 
-// Optional: Update database function if you're maintaining a local subscription table
-// async function updateDatabaseSubscription(userId: string, isActive: boolean, subscription: Stripe.Subscription) {
-//   // Implement your database update logic here
-//   // For example, using Prisma:
-//   // await prisma.subscription.upsert({
-//   //   where: { userId },
-//   //   update: {
-//   //     status: isActive ? 'active' : 'inactive',
-//   //     currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-//   //   },
-//   //   create: {
-//   //     userId,
-//   //     status: isActive ? 'active' : 'inactive',
-//   //     currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-//   //   },
-//   // });
-// }
-
-// async function handleSuccessfulSubscription(
-//   firebaseUserId: string
-// ): Promise<void> {
-//   try {
-//     await prismaLocalClient.subscription.upsert({
-//       where: { firebaseUserId },
-//       update: { status: "active", startDate: new Date() },
-//       create: { firebaseUserId, status: "active", startDate: new Date() },
-//     });
-//   } catch (error) {
-//     console.error("Error updating subscription status:", error);
-//   }
-// }
-
-// async function handleCancelledSubscription(
-//   firebaseUserId: string
-// ): Promise<void> {
-//   try {
-//     await prismaLocalClient.subscription.update({
-//       where: { firebaseUserId },
-//       data: { status: "cancelled", endDate: new Date() },
-//     });
-//   } catch (error) {
-//     console.error("Error updating subscription status:", error);
-//   }
-// }
-
 // Cancel subscription
 app.post(
   "/cancel-subscription",
@@ -418,45 +411,33 @@ app.post(
   }
 );
 
-// Update payment method
 app.post(
   "/update-payment-method",
   verifyFirebaseToken,
   async (req: AuthenticatedRequest, res: Response) => {
     const firebaseUserId = req.user?.uid;
+    const userEmail = req.user?.email;
 
-    if (!firebaseUserId) {
-      return res.status(400).json({ error: "User ID not found" });
+    if (!firebaseUserId || !userEmail) {
+      return res.status(400).json({ error: "User ID or email not found" });
     }
 
     try {
-      const subscription = await prismaLocalClient.subscription.findUnique({
-        where: { firebaseUserId },
+      // Get or create a Stripe customer
+      const customer = await getOrCreateStripeCustomer(
+        firebaseUserId,
+        userEmail
+      );
+
+      // Create a billing portal session
+      const session = await stripe.billingPortal.sessions.create({
+        customer: customer.id,
+        return_url: `https://${process.env.PEOPLES_PRESS_DOMAIN}/extension-redirect?status=payment_updated`,
       });
 
-      if (!subscription) {
-        return res.status(404).json({ error: "Subscription not found" });
-      }
-
-      // Fetch Stripe customer
-      const stripeCustomer = await stripe.customers.list({
-        email: req.user?.email,
-        limit: 1,
-      });
-
-      if (stripeCustomer.data.length === 0) {
-        return res.status(404).json({ error: "Stripe customer not found" });
-      }
-
-      // Create a SetupIntent
-      const setupIntent = await stripe.setupIntents.create({
-        customer: stripeCustomer.data[0].id,
-        payment_method_types: ["card"],
-      });
-
-      res.json({ clientSecret: setupIntent.client_secret });
+      res.json({ updateUrl: session.url });
     } catch (error) {
-      console.error("Error updating payment method:", error);
+      console.error("Error creating billing portal session:", error);
       res.status(500).json({ error: "Error updating payment method" });
     }
   }
