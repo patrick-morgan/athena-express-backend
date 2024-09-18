@@ -187,9 +187,9 @@ For example, for "www.cnn.com" the correct response would be:
   date_founded: "06/01/1980"
 }
 
-If there is confusion or you cannot retrieve the proper human-readable name, please respond with "NULL" for the name field. If the date the news company was founded is not in your knowledge or is confusing/could have multiple interpretations, please also respond with "NULL" for the date_founded field.
+If there is confusion or you cannot retrieve the proper human-readable name, please respond with the url but remove www. (e.g. www.github.com would be github.com) for the name field. If the date the news company was founded is not in your knowledge or is confusing/could have multiple interpretations, please also respond with "NULL" for the date_founded field.
 
-The accuracy of this information is important. It is better to respond with "NULL" than to provide a potentially incorrect answer.
+The accuracy of this information is important.
 
 Please provide the JSON response for the following hostname:
 
