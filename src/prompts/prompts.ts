@@ -22,7 +22,7 @@ export const isSummaryResponse = (json: any): json is SummaryResponseType => {
 };
 
 export const summaryPrompt = `
-Objective: Generate a concise and accurate summary of the given news article. The summary should highlight the main points, key arguments, and significant evidence presented in the article. Ensure that the summary is factual and provides direct evidence by citing specific parts of the article using footnotes. If the content does not appear to be a news article, that is okay, generate a summary anyways and consider commenting that this does not appear to be news content. The output should be in JSON format.
+Objective: Generate a concise and accurate summary of the given news article. The summary should highlight the main points, key arguments, and significant evidence presented in the article. Ensure that the summary is factual and provides direct evidence by citing specific parts of the article using footnotes. The footnotes should contain the exact text from the article so that we can use it for highlighting. If the content does not appear to be a news article, that is okay, generate a summary anyways and consider commenting that this does not appear to be news content. The output should be in JSON format.
 
 Article Content:
 ${articleContentReplace}
@@ -30,11 +30,10 @@ ${articleContentReplace}
 Guidelines for Summary:
 
 1. Main Points: Identify and summarize the main points and key arguments presented in the article.
-2. Key Evidence: Integrate significant evidence and examples directly within the main points using footnotes for references.
+2. Key Evidence: Integrate significant evidence and examples directly within the main points using footnotes for references. The footnotes must contain the exact original text from the article, so that we can use the text directly for highlighting.
 3. Neutral Tone: Maintain a neutral tone, avoiding any bias or subjective language.
-4. Conciseness: Keep the summary concise, ideally between 100-150 words.
-5. Footnotes: Use footnotes to provide direct references or quotes from the article.
-6. JSON Format: Ensure the output is in the following JSON format:
+4. Conciseness: Keep the summary concise, ideally no more than 120 words. 
+5. JSON Format: Ensure the output is in the following JSON format:
    - Do not include any Markdown formatting or code blocks in the output.
 {
   "summary": "The article discusses the impact of climate change on coastal cities, noting that rising sea levels are leading to increased flooding[^1]. It examines the economic implications, highlighting the cost of infrastructure damage[^2]. Additionally, it addresses the challenges faced by local governments in mitigating these effects[^3].",
@@ -75,7 +74,7 @@ export const isPoliticalBiasResponse = (
 };
 
 export const politicalBiasPrompt = `
-Objective: Analyze the given news article for political bias and generate a bias score from 0 to 100 where 0 is very left wing, 50 is moderate, and 100 is very right wing. Provide specific examples from the article that illustrate the bias, using footnotes for references. If the article does not appear to be a news article or a political bias score is not relevant for the content, reply with 50 for the bias_score, provide a reason why in the analysis section, and respond with an empty object {} for footnotes. The output should be in JSON format.
+Objective: Analyze the given news article for political bias and generate a bias score from 0 to 100 where 0 is very left wing, 50 is moderate, and 100 is very right wing. Provide specific examples from the article that illustrate the bias, using footnotes for references. The footnotes should contain the exact text from the article so that we can use it for highlighting. If the article does not appear to be a news article or a political bias score is not relevant for the content, reply with 50 for the bias_score, provide a reason why in the analysis section, and respond with an empty object {} for footnotes. The output should be in JSON format.
 
 Article Content:
 ${articleContentReplace}
@@ -84,17 +83,18 @@ Guidelines for Analysis:
 
 1. Bias Score: Assign a bias score from 0 to 100 where 0 is very left wing, 50 is moderate, and 100 is very right wing.
 2. Main Indicators: Identify main indicators of bias in the article, such as language, framing, selection of facts, and sources.
-3. Key Evidence: Integrate significant evidence and examples directly within the analysis using footnotes for references.
+3. Key Evidence: Integrate significant evidence and examples directly within the analysis using footnotes for references. The footnotes must contain the exact original text from the article, so that we can use the text directly for highlighting.
 4. Neutral Tone: Maintain a neutral tone, avoiding any bias or subjective language.
-5. JSON Format: Ensure the output is in the following JSON format:
+5. Conciseness: Keep the analysis concise, ideally no more than a few sentences.
+6. JSON Format: Ensure the output is in the following JSON format:
    - Do not include any Markdown formatting or code blocks in the output.
 
 {
   "bias_score": 0,
   "analysis": "The article predominantly uses language and framing that support left-wing perspectives. For example, it describes progressive policies positively while criticizing conservative viewpoints[^1]. The selection of facts and sources also shows a preference for left-leaning information[^2].",
   "footnotes": {
-    "^1": "The article states, 'Progressive policies are essential for social justice and equity.'",
-    "^2": "It cites studies from predominantly left-leaning think tanks while ignoring conservative perspectives."
+    "^1": "Progressive policies are essential for social justice and equity",
+    "^2": "A spokesperson for Vice President Kamala Harris’ campaign said that 'a few individuals were targeted on their personal emails.'"
   }
 }
 
@@ -128,7 +128,7 @@ export const isObjectivityResponse = (
 };
 
 export const objectivityPrompt = `
-Objective: Analyze the given news article to determine how opinionated/persuasive it is versus how factual/objective it is. Generate a score from 0 to 100 where 0 is very opinionated/rhetorical (think op-ed piece) and 100 is very factual/objective (think only the facts). Provide specific examples from the article that illustrate the level of opinionation or factuality, using footnotes for references. If the article does not appear to be a news article or a objectivity score is not relevant for the content, reply with either 0 or 100 for the rhetoric_score, provide a reason why in the analysis section, and respond with an empty object {} for footnotes. The output should be in JSON format.
+Objective: Analyze the given news article to determine how opinionated/persuasive it is versus how factual/objective it is. Generate a score from 0 to 100 where 0 is very opinionated/rhetorical (think op-ed piece) and 100 is very factual/objective (think only the facts). Provide specific examples from the article that illustrate the level of opinionation or factuality, using footnotes for references. The footnotes should contain the exact text from the article so that we can use it for highlighting. If the article does not appear to be a news article or a objectivity score is not relevant for the content, reply with either 0 or 100 for the rhetoric_score, provide a reason why in the analysis section, and respond with an empty object {} for footnotes. The output should be in JSON format.
 
 Article Content:
 ${articleContentReplace}
@@ -137,17 +137,18 @@ Guidelines for Analysis:
 
 1. Rhetoric Score: Assign a rhetoric score from 0 to 100 where 0 is very opinionated/rhetorical and 100 is very factual/objective.
 2. Main Indicators: Identify main indicators of rhetoric in the article, such as language, tone, use of evidence, and presentation of facts versus opinions.
-3. Key Evidence: Integrate significant evidence and examples directly within the analysis using footnotes for references.
+3. Key Evidence: Integrate significant evidence and examples directly within the analysis using footnotes for references. The footnotes must contain the exact original text from the article, so that we can use the text directly for highlighting.
 4. Neutral Tone: Maintain a neutral tone, avoiding any bias or subjective language.
-5. JSON Format: Ensure the output is in the following JSON format:
+5. Conciseness: Keep the analysis concise, ideally no more than a few sentences.
+6. JSON Format: Ensure the output is in the following JSON format:
    - Do not include any Markdown formatting or code blocks in the output.
 
 {
   "rhetoric_score": 0,
   "analysis": "The article predominantly uses opinionated language and persuasive arguments. For example, it makes assertive statements without substantial evidence[^1]. The tone is subjective, emphasizing personal viewpoints over factual reporting[^2].",
   "footnotes": {
-    "^1": "The article states, 'The government's approach is flawed and destined to fail.'",
-    "^2": "It uses phrases like 'I believe' and 'It seems clear that,' which indicate a subjective perspective."
+    "^1": "The government's approach is flawed and destined to fail",
+    "^2": "I believe this to be true because it seems to me like it is"
   }
 }
 
@@ -248,8 +249,8 @@ export const buildPublicationAnalysisPrompt = (
 Given the following data about a publication's articles, write a singular cohesive analysis on why the publication is receiving their polarization and objectivity scores:
 
 {
-    averagePolarization: number; // Score from 0 to 1 on how polarized the publication was in the articles they have published. 0 is very left wing and 1 is very right wing, 0.5 is moderate.
-    averageObjectivity: number;  // Score from 0 to 1 on how objective the publication was in the articles they have published. 0 means completely subjective (op-eds), 1 means objective.
+    averagePolarization: number; // Score from 0 to 100 on how polarized the publication was in the articles they have published. 0 is very left wing and 100 is very right wing, 50 is moderate.
+    averageObjectivity: number;  // Score from 0 to 100 on how objective the publication was in the articles they have published. 0 means completely subjective (op-eds), 1 means objective.
     summaries: string[]; // Summaries of all articles the publication has published
 }
 
