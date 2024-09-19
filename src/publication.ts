@@ -1,4 +1,4 @@
-import { gptApiCall } from "./prompts/chatgpt";
+import { DEFAULT_LLM_MODEL, gptApiCall } from "./prompts/chatgpt";
 import {
   isPublicationMetadataResponse,
   publicationMetadataPrompt,
@@ -6,7 +6,7 @@ import {
 
 export const fetchPublicationMetadata = async (hostname: string) => {
   const requestPayload = {
-    model: "gpt-4o",
+    model: DEFAULT_LLM_MODEL,
     messages: [
       {
         role: "system",

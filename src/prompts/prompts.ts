@@ -1,279 +1,116 @@
+// prompts.ts
+
 import { JournalistAnalysisData, PublicationAnalysisData } from "./chatgpt";
 
 export const articleContentReplace = "[Insert article content here]";
 
-// This should ALWAYS match the output example in the summary prompt
-export type SummaryResponseType = {
-  summary: string;
-  footnotes: { [key: string]: string };
+// JSON Schemas
+export const SummaryResponseSchema = {
+  type: "object",
+  properties: {
+    summary: { type: "string" },
+    footnotes: {
+      type: "object",
+      additionalProperties: { type: "string" },
+    },
+  },
+  required: ["summary", "footnotes"],
 };
 
-export const isSummaryResponse = (json: any): json is SummaryResponseType => {
-  return (
-    typeof json === "object" &&
-    json !== null &&
-    typeof json.summary === "string" &&
-    typeof json.footnotes === "object" &&
-    json.footnotes !== null &&
-    Object.keys(json.footnotes).every(
-      (key) => typeof json.footnotes[key] === "string"
-    )
-  );
+export const PoliticalBiasResponseSchema = {
+  type: "object",
+  properties: {
+    bias_score: { type: "number" },
+    analysis: { type: "string" },
+    footnotes: {
+      type: "object",
+      additionalProperties: { type: "string" },
+    },
+  },
+  required: ["bias_score", "analysis", "footnotes"],
 };
+
+export const ObjectivityBiasResponseSchema = {
+  type: "object",
+  properties: {
+    rhetoric_score: { type: "number" },
+    analysis: { type: "string" },
+    footnotes: {
+      type: "object",
+      additionalProperties: { type: "string" },
+    },
+  },
+  required: ["rhetoric_score", "analysis", "footnotes"],
+};
+
+export const JournalistAnalysisResponseSchema = {
+  type: "object",
+  properties: {
+    analysis: { type: "string" },
+  },
+  required: ["analysis"],
+};
+
+// Updated Prompts
 
 export const summaryPrompt = `
-Objective: Generate a concise and accurate summary of the given news article. The summary should highlight the main points, key arguments, and significant evidence presented in the article. Ensure that the summary is factual and provides direct evidence by citing specific parts of the article using footnotes. The footnotes should contain the exact text from the article so that we can use it for highlighting. If the content does not appear to be a news article, that is okay, generate a summary anyways and consider commenting that this does not appear to be news content. The output should be in JSON format.
+Generate a concise and accurate summary of the given news article, highlighting the main points, key arguments, and significant evidence. Use footnotes to cite specific parts of the article, with footnotes containing the exact text from the article for highlighting purposes. If the content is not a news article, generate a summary and note that it may not be news content.
+
+**Please present the summary as markdown-formatted bullet points in the 'summary' field of the JSON output.**
 
 Article Content:
 ${articleContentReplace}
-
-Guidelines for Summary:
-
-1. Main Points: Identify and summarize the main points and key arguments presented in the article.
-2. Key Evidence: Integrate significant evidence and examples directly within the main points using footnotes for references. The footnotes must contain the exact original text from the article, so that we can use the text directly for highlighting.
-3. Neutral Tone: Maintain a neutral tone, avoiding any bias or subjective language.
-4. Conciseness: Keep the summary concise, ideally no more than 120 words. 
-5. JSON Format: Ensure the output is in the following JSON format:
-   - Do not include any Markdown formatting or code blocks in the output.
-{
-  "summary": "The article discusses the impact of climate change on coastal cities, noting that rising sea levels are leading to increased flooding[^1]. It examines the economic implications, highlighting the cost of infrastructure damage[^2]. Additionally, it addresses the challenges faced by local governments in mitigating these effects[^3].",
-  "footnotes": {
-    "^1": "In the past decade, sea levels have risen by an average of 3.3 millimeters per year, causing more frequent and severe coastal flooding.",
-    "^2": "The damage to infrastructure is expected to cost billions of dollars annually by 2050.",
-    "^3": "Local governments are struggling to implement effective measures due to budget constraints and political challenges."
-  }
-}
-
-Summary:
-
-Please generate a summary based on the guidelines and example format provided above.
 `;
-
-// This should ALWAYS match the output example in the political bias prompt
-export type PoliticalBiasResponseType = {
-  bias_score: number;
-  analysis: string;
-  footnotes: { [key: string]: string };
-};
-
-export const isPoliticalBiasResponse = (
-  json: any
-): json is PoliticalBiasResponseType => {
-  return (
-    typeof json === "object" &&
-    json !== null &&
-    (typeof json.bias_score === "number" ||
-      typeof json.bias_score === "string") &&
-    typeof json.analysis === "string" &&
-    typeof json.footnotes === "object" &&
-    json.footnotes !== null &&
-    Object.keys(json.footnotes).every(
-      (key) => typeof json.footnotes[key] === "string"
-    )
-  );
-};
 
 export const politicalBiasPrompt = `
-Objective: Analyze the given news article for political bias and generate a bias score from 0 to 100 where 0 is very left wing, 50 is moderate, and 100 is very right wing. Provide specific examples from the article that illustrate the bias, using footnotes for references. The footnotes should contain the exact text from the article so that we can use it for highlighting. If the article does not appear to be a news article or a political bias score is not relevant for the content, reply with 50 for the bias_score, provide a reason why in the analysis section, and respond with an empty object {} for footnotes. The output should be in JSON format.
+Analyze the given news article for political bias and assign a bias score from 0 to 100 (0 = very left-wing, 50 = moderate, 100 = very right-wing). Provide specific examples from the article that illustrate the bias, using footnotes containing the exact text from the article for highlighting purposes. If the article is not a news article or political bias is not relevant, assign a bias score of 50, explain why in the analysis, and provide an empty object for footnotes.
+
+**Please present the analysis as markdown-formatted bullet points in the 'analysis' field of the JSON output.**
 
 Article Content:
 ${articleContentReplace}
-
-Guidelines for Analysis:
-
-1. Bias Score: Assign a bias score from 0 to 100 where 0 is very left wing, 50 is moderate, and 100 is very right wing.
-2. Main Indicators: Identify main indicators of bias in the article, such as language, framing, selection of facts, and sources.
-3. Key Evidence: Integrate significant evidence and examples directly within the analysis using footnotes for references. The footnotes must contain the exact original text from the article, so that we can use the text directly for highlighting.
-4. Neutral Tone: Maintain a neutral tone, avoiding any bias or subjective language.
-5. Conciseness: Keep the analysis concise, ideally no more than a few sentences.
-6. JSON Format: Ensure the output is in the following JSON format:
-   - Do not include any Markdown formatting or code blocks in the output.
-
-{
-  "bias_score": 0,
-  "analysis": "The article predominantly uses language and framing that support left-wing perspectives. For example, it describes progressive policies positively while criticizing conservative viewpoints[^1]. The selection of facts and sources also shows a preference for left-leaning information[^2].",
-  "footnotes": {
-    "^1": "Progressive policies are essential for social justice and equity",
-    "^2": "A spokesperson for Vice President Kamala Harris’ campaign said that 'a few individuals were targeted on their personal emails.'"
-  }
-}
-
-Analysis:
-
-Please analyze the political biases in the article based on the guidelines and example format provided above.
 `;
-
-// This should ALWAYS match the output example in the objectivity prompt
-export type ObjectivityBiasResponseType = {
-  rhetoric_score: number;
-  analysis: string;
-  footnotes: { [key: string]: string };
-};
-
-export const isObjectivityResponse = (
-  json: any
-): json is ObjectivityBiasResponseType => {
-  return (
-    typeof json === "object" &&
-    json !== null &&
-    (typeof json.rhetoric_score === "number" ||
-      typeof json.rhetoric_score === "string") &&
-    typeof json.analysis === "string" &&
-    typeof json.footnotes === "object" &&
-    json.footnotes !== null &&
-    Object.keys(json.footnotes).every(
-      (key) => typeof json.footnotes[key] === "string"
-    )
-  );
-};
 
 export const objectivityPrompt = `
-Objective: Analyze the given news article to determine how opinionated/persuasive it is versus how factual/objective it is. Generate a score from 0 to 100 where 0 is very opinionated/rhetorical (think op-ed piece) and 100 is very factual/objective (think only the facts). Provide specific examples from the article that illustrate the level of opinionation or factuality, using footnotes for references. The footnotes should contain the exact text from the article so that we can use it for highlighting. If the article does not appear to be a news article or a objectivity score is not relevant for the content, reply with either 0 or 100 for the rhetoric_score, provide a reason why in the analysis section, and respond with an empty object {} for footnotes. The output should be in JSON format.
+Analyze the given news article to determine how opinionated or factual it is, assigning a rhetoric score from 0 to 100 (0 = very opinionated, 100 = very factual). Provide specific examples from the article that illustrate the level of opinionation or factuality, using footnotes containing the exact text from the article for highlighting purposes. If the article is not a news article or objectivity analysis is not relevant, assign a rhetoric score of 100, explain why in the analysis, and provide an empty object for footnotes.
+
+**Please present the analysis as markdown-formatted bullet points in the 'analysis' field of the JSON output.**
 
 Article Content:
 ${articleContentReplace}
-
-Guidelines for Analysis:
-
-1. Rhetoric Score: Assign a rhetoric score from 0 to 100 where 0 is very opinionated/rhetorical and 100 is very factual/objective.
-2. Main Indicators: Identify main indicators of rhetoric in the article, such as language, tone, use of evidence, and presentation of facts versus opinions.
-3. Key Evidence: Integrate significant evidence and examples directly within the analysis using footnotes for references. The footnotes must contain the exact original text from the article, so that we can use the text directly for highlighting.
-4. Neutral Tone: Maintain a neutral tone, avoiding any bias or subjective language.
-5. Conciseness: Keep the analysis concise, ideally no more than a few sentences.
-6. JSON Format: Ensure the output is in the following JSON format:
-   - Do not include any Markdown formatting or code blocks in the output.
-
-{
-  "rhetoric_score": 0,
-  "analysis": "The article predominantly uses opinionated language and persuasive arguments. For example, it makes assertive statements without substantial evidence[^1]. The tone is subjective, emphasizing personal viewpoints over factual reporting[^2].",
-  "footnotes": {
-    "^1": "The government's approach is flawed and destined to fail",
-    "^2": "I believe this to be true because it seems to me like it is"
-  }
-}
-
-Analysis:
-
-Please analyze the rhetoric in the article based on the guidelines and example format provided above.
 `;
 
-type PublicationMetadataResponse = {
-  name: string | null;
-  date_founded: string | null;
-};
+export const buildJournalistAnalysisPrompt = (data: JournalistAnalysisData) => `
+Given the following data about a journalist's articles, write an analysis explaining the journalist's average polarization and objectivity scores. Include specific examples from the article summaries to support your points.
 
-export const isPublicationMetadataResponse = (
-  json: any
-): json is PublicationMetadataResponse => {
-  return (
-    typeof json === "object" &&
-    json !== null &&
-    typeof json.name === "string" &&
-    typeof json.date_founded === "string"
-  );
-};
+**Please present the analysis as markdown-formatted bullet points in the 'analysis' field of the JSON output.**
 
-export const publicationMetadataPrompt = `
-Given the hostname of a news company (e.g., www.cnn.com), return a JSON object containing metadata information on the news company. Do not include any Markdown formattign or code blocks in the output. The structure of the JSON object should be as follows:
-
-{
-  name: string, // human-friendly name (or what news company is commonly referred as)
-  date_founded: string // in format MM/DD/YYYY
-}
-
-For example, for "www.cnn.com" the correct response would be:
-
-{
-  name: "CNN",
-  date_founded: "06/01/1980"
-}
-
-If there is confusion or you cannot retrieve the proper human-readable name, please respond with the url but remove www. (e.g. www.github.com would be github.com) for the name field. If the date the news company was founded is not in your knowledge or is confusing/could have multiple interpretations, please also respond with "NULL" for the date_founded field.
-
-The accuracy of this information is important.
-
-Please provide the JSON response for the following hostname:
-
-{hostname}
+Data:
+- Average Polarization Score: ${
+  data.averagePolarization
+} (0 = very left-wing, 50 = moderate, 100 = very right-wing)
+- Average Objectivity Score: ${
+  data.averageObjectivity
+} (0 = very opinionated, 100 = very factual)
+- Article Summaries: ${JSON.stringify(data.summaries)}
 `;
-
-export type JournalistAnalysisResponse = {
-  analysis: string;
-};
-
-export const isJournalistAnalysisResponse = (
-  json: any
-): json is JournalistAnalysisResponse => {
-  return (
-    typeof json === "object" &&
-    json !== null &&
-    typeof json.analysis === "string"
-  );
-};
-
-export const buildJournalistAnalysisPrompt = (data: JournalistAnalysisData) => {
-  return `
-Given the following data about a journalist's articles, write a singular cohesive analysis on why the journalist is receiving their polarization and objectivity scores:
-
-{
-    averagePolarization: number; // Score from 0 to 100 on how polarized the journalist was in the articles they have written. 0 is very left wing and 100 is very right wing, 50 is moderate.
-    averageObjectivity: number;  // Score from 0 to 100 on how objective a journalist was in the articles they have written. 0 means completely subjective (op-eds), 100 means objective.
-    summaries: string[]; // Summaries of all articles journalist has written
-}
-
-In your analysis, include the following points:
-1. Explain the average polarization score and what it indicates about the journalist's writing.
-2. Explain the average objectivity score and what it indicates about the journalist's writing.
-3. Provide specific examples from the article summaries to support your analysis.
-
-Please return the analysis in the following JSON format without including any Markdown formatting or backticks, and ensure all newline characters within strings are properly escaped:
-
-{
-  "analysis": "string"
-}
-
-Please provide the analysis for the following data:
-
-{
-    "averagePolarization": ${data.averagePolarization},
-    "averageObjectivity": ${data.averageObjectivity},
-    "summaries": ${JSON.stringify(data.summaries)}
-}
-`;
-};
 
 export const buildPublicationAnalysisPrompt = (
   data: PublicationAnalysisData
-) => {
-  return `
-Given the following data about a publication's articles, write a singular cohesive analysis on why the publication is receiving their polarization and objectivity scores:
+) => `
+Given the following data about a publication's articles, write an analysis explaining the publication's average polarization and objectivity scores. Include specific examples from the article summaries to support your points.
 
-{
-    averagePolarization: number; // Score from 0 to 100 on how polarized the publication was in the articles they have published. 0 is very left wing and 100 is very right wing, 50 is moderate.
-    averageObjectivity: number;  // Score from 0 to 100 on how objective the publication was in the articles they have published. 0 means completely subjective (op-eds), 1 means objective.
-    summaries: string[]; // Summaries of all articles the publication has published
-}
+**Please present the analysis as markdown-formatted bullet points in the 'analysis' field of the JSON output.**
 
-In your analysis, include the following points:
-1. Explain the average polarization score and what it indicates about the publication's articles.
-2. Explain the average objectivity score and what it indicates about the publication's articles.
-3. Provide specific examples from the article summaries to support your analysis.
-
-Please return the analysis in the following JSON format without including any Markdown formatting or backticks, and ensure all newline characters within strings are properly escaped:
-
-{
-  "analysis": "string"
-}
-
-Please provide the analysis for the following data:
-
-{
-    "averagePolarization": ${data.averagePolarization},
-    "averageObjectivity": ${data.averageObjectivity},
-    "summaries": ${JSON.stringify(data.summaries)}
-}
+Data:
+- Average Polarization Score: ${
+  data.averagePolarization
+} (0 = very left-wing, 50 = moderate, 100 = very right-wing)
+- Average Objectivity Score: ${
+  data.averageObjectivity
+} (0 = very opinionated, 100 = very factual)
+- Article Summaries: ${JSON.stringify(data.summaries)}
 `;
-};
 
 export type HTMLParseResponse = {
   title: string;
@@ -319,4 +156,54 @@ Please return the output in the following JSON format without including any Mark
 Parsing:
 
 Please parse the HTML DOM substring based on the guidelines and example format provided above.
+`;
+
+export type ArticleData = {
+  title: string;
+  date: Date;
+  authors: string[];
+  text: string;
+  url: string;
+  hostname: string;
+  subtitle?: string;
+};
+
+type PublicationMetadataResponse = {
+  name: string | null;
+  date_founded: string | null;
+};
+
+export const isPublicationMetadataResponse = (
+  json: any
+): json is PublicationMetadataResponse => {
+  return (
+    typeof json === "object" &&
+    json !== null &&
+    typeof json.name === "string" &&
+    typeof json.date_founded === "string"
+  );
+};
+
+export const publicationMetadataPrompt = `
+Given the hostname of a news company (e.g., www.cnn.com), return a JSON object containing metadata information on the news company. Do not include any Markdown formattign or code blocks in the output. The structure of the JSON object should be as follows:
+
+{
+  name: string, // human-friendly name (or what news company is commonly referred as)
+  date_founded: string // in format MM/DD/YYYY
+}
+
+For example, for "www.cnn.com" the correct response would be:
+
+{
+  name: "CNN",
+  date_founded: "06/01/1980"
+}
+
+If there is confusion or you cannot retrieve the proper human-readable name, please respond with the url but remove www. (e.g. www.github.com would be github.com) for the name field. If the date the news company was founded is not in your knowledge or is confusing/could have multiple interpretations, please also respond with "NULL" for the date_founded field.
+
+The accuracy of this information is important.
+
+Please provide the JSON response for the following hostname:
+
+{hostname}
 `;

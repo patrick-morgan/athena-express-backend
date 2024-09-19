@@ -1,19 +1,8 @@
 import axios from "axios";
 import {
-  JournalistAnalysisResponse,
-  ObjectivityBiasResponseType,
-  PoliticalBiasResponseType,
-  SummaryResponseType,
-  articleContentReplace,
   buildJournalistAnalysisPrompt,
   buildPublicationAnalysisPrompt,
-  isJournalistAnalysisResponse,
-  isObjectivityResponse,
-  isPoliticalBiasResponse,
-  isSummaryResponse,
-  objectivityPrompt,
-  politicalBiasPrompt,
-  summaryPrompt,
+  JournalistAnalysisResponseSchema,
 } from "./prompts";
 
 type RequestPayloadType = {
@@ -23,12 +12,18 @@ type RequestPayloadType = {
     content: string;
   }[];
   temperature: number;
+  response_format?: {
+    type: string;
+    json_schema?: object;
+  };
 };
 
-export const buildRequestPayload = (prompt: string) => {
+export const DEFAULT_LLM_MODEL = "gpt-4o-mini";
+
+export const buildRequestPayload = (prompt: string, jsonSchema?: object) => {
   // Define the request payload
   const requestPayload: RequestPayloadType = {
-    model: "gpt-4o",
+    model: DEFAULT_LLM_MODEL,
     messages: [
       {
         role: "system",
@@ -37,6 +32,14 @@ export const buildRequestPayload = (prompt: string) => {
     ],
     temperature: 0,
   };
+
+  if (jsonSchema) {
+    requestPayload.response_format = {
+      type: "json_schema",
+      json_schema: jsonSchema,
+    };
+  }
+
   return requestPayload;
 };
 
@@ -54,64 +57,33 @@ export const gptApiCall = async (requestPayload: RequestPayloadType) => {
   return response;
 };
 
-export const cleanJSONString = (str: string): string => {
-  return str
-    .replace(/[\n\r\t]/g, "")
-    .replace(/\\n/g, "\\\\n")
-    .replace(/\\t/g, "\\\\t");
-};
-
 export type PublicationAnalysisData = {
   averagePolarization: number;
   averageObjectivity: number;
   summaries: string[];
 };
 
+type AnalysisResponse = {
+  analysis: string;
+};
+
 export const analyzePublicationBias = async (
-  data: JournalistAnalysisData
-): Promise<JournalistAnalysisResponse | null> => {
+  data: PublicationAnalysisData
+): Promise<AnalysisResponse | null> => {
   const prompt = buildPublicationAnalysisPrompt(data);
 
-  const requestPayload = {
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "system",
-        content: prompt,
-      },
-    ],
-    temperature: 0,
-  };
+  const requestPayload = buildRequestPayload(
+    prompt,
+    JournalistAnalysisResponseSchema
+  );
+
   try {
     const response = await gptApiCall(requestPayload);
-    let responseData = response.data.choices[0].message.content;
-    console.info("Publication analysis JSON response:", responseData);
+    const responseData = response.data.choices[0].message.content;
+    console.info("Publication analysis response:", responseData);
 
-    // Clean the JSON string
-    responseData = cleanJSONString(responseData);
-
-    // Attempt to parse the JSON response
-    let jsonResponse: any;
-    try {
-      jsonResponse = JSON.parse(responseData);
-    } catch (parseError) {
-      console.error(
-        "Error parsing publication analysis JSON response:",
-        parseError
-      );
-      return null;
-    }
-
-    // Validate the JSON structure
-    if (isJournalistAnalysisResponse(jsonResponse)) {
-      return jsonResponse;
-    } else {
-      console.error(
-        "Invalid publication analysis JSON structure:",
-        jsonResponse
-      );
-      return null;
-    }
+    const jsonResponse = JSON.parse(responseData);
+    return jsonResponse;
   } catch (error) {
     console.error("Error analyzing publication analysis:", error);
     return null;
@@ -126,49 +98,21 @@ export type JournalistAnalysisData = {
 
 export const analyzeJournalistBias = async (
   data: JournalistAnalysisData
-): Promise<JournalistAnalysisResponse | null> => {
+): Promise<AnalysisResponse | null> => {
   const prompt = buildJournalistAnalysisPrompt(data);
 
-  const requestPayload = {
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "system",
-        content: prompt,
-      },
-    ],
-    temperature: 0,
-  };
+  const requestPayload = buildRequestPayload(
+    prompt,
+    JournalistAnalysisResponseSchema
+  );
+
   try {
     const response = await gptApiCall(requestPayload);
-    let responseData = response.data.choices[0].message.content;
-    console.info("Journalist analysis JSON response:", responseData);
+    const responseData = response.data.choices[0].message.content;
+    console.info("Journalist analysis response:", responseData);
 
-    // Clean the JSON string
-    responseData = cleanJSONString(responseData);
-
-    // Attempt to parse the JSON response
-    let jsonResponse: any;
-    try {
-      jsonResponse = JSON.parse(responseData);
-    } catch (parseError) {
-      console.error(
-        "Error parsing journalist analysis JSON response:",
-        parseError
-      );
-      return null;
-    }
-
-    // Validate the JSON structure
-    if (isJournalistAnalysisResponse(jsonResponse)) {
-      return jsonResponse;
-    } else {
-      console.error(
-        "Invalid journalist analysis JSON structure:",
-        jsonResponse
-      );
-      return null;
-    }
+    const jsonResponse = JSON.parse(responseData);
+    return jsonResponse;
   } catch (error) {
     console.error("Error analyzing journalist analysis:", error);
     return null;

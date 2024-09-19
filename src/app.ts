@@ -15,14 +15,10 @@ import {
   analyzeJournalistBias,
   analyzePublicationBias,
   buildRequestPayload,
-  cleanJSONString,
   gptApiCall,
 } from "./prompts/chatgpt";
 import {
   articleContentReplace,
-  isObjectivityResponse,
-  isPoliticalBiasResponse,
-  isSummaryResponse,
   objectivityPrompt,
   politicalBiasPrompt,
   summaryPrompt,
@@ -873,7 +869,7 @@ app.post(
       console.info("Summary LLM response:", responseData);
 
       // Clean the JSON string
-      responseData = cleanJSONString(responseData);
+      // responseData = cleanJSONString(responseData);
 
       // Attempt to parse the JSON response
       let jsonResponse;
@@ -887,24 +883,16 @@ app.post(
           .json({ error: "Error parsing summary JSON response" });
       }
 
-      // Validate the JSON structure
-      if (isSummaryResponse(jsonResponse)) {
-        // Create the article summary
-        const newArticleSummary = await prismaLocalClient.summary.create({
-          data: {
-            article_id: articleId,
-            summary: jsonResponse.summary,
-            footnotes: jsonResponse.footnotes,
-          },
-        });
-        console.info("Created article summary:", newArticleSummary);
-        return res.json(newArticleSummary);
-      } else {
-        console.error("Invalid summary JSON structure:", jsonResponse);
-        return res
-          .status(500)
-          .json({ error: "Invalid summary JSON structure" });
-      }
+      // Create the article summary
+      const newArticleSummary = await prismaLocalClient.summary.create({
+        data: {
+          article_id: articleId,
+          summary: jsonResponse.summary,
+          footnotes: jsonResponse.footnotes,
+        },
+      });
+      console.info("Created article summary:", newArticleSummary);
+      return res.json(newArticleSummary);
     } catch (error) {
       console.error("Error generating summary:", error);
       return res.status(500).json({ error: "Error generating summary" });
@@ -937,7 +925,7 @@ app.post(
       console.info("Political bias LLM response:", responseData);
 
       // Clean the JSON string
-      responseData = cleanJSONString(responseData);
+      // responseData = cleanJSONString(responseData);
 
       // Attempt to parse the JSON response
       let jsonResponse;
@@ -954,27 +942,17 @@ app.post(
           .json({ error: "Error parsing political bias JSON response" });
       }
 
-      // Validate the JSON structure
-      if (isPoliticalBiasResponse(jsonResponse)) {
-        // Create article political bias
-        const newArticleBias = await prismaLocalClient.polarization_bias.create(
-          {
-            data: {
-              article_id: articleId,
-              analysis: jsonResponse.analysis,
-              bias_score: jsonResponse.bias_score,
-              footnotes: jsonResponse.footnotes,
-            },
-          }
-        );
-        console.info("Created article political bias:", newArticleBias);
-        return res.json(newArticleBias);
-      } else {
-        console.error("Invalid political bias JSON structure:", jsonResponse);
-        return res
-          .status(500)
-          .json({ error: "Invalid political bias JSON structure" });
-      }
+      // Create article political bias
+      const newArticleBias = await prismaLocalClient.polarization_bias.create({
+        data: {
+          article_id: articleId,
+          analysis: jsonResponse.analysis,
+          bias_score: jsonResponse.bias_score,
+          footnotes: jsonResponse.footnotes,
+        },
+      });
+      console.info("Created article political bias:", newArticleBias);
+      return res.json(newArticleBias);
     } catch (error) {
       console.error("Error analyzing political bias:", error);
       return res.status(500).json({ error: "Error analyzing political bias" });
@@ -1006,7 +984,7 @@ app.post(
       console.info("Objectivity JSON response:", responseData);
 
       // Clean the JSON string
-      responseData = cleanJSONString(responseData);
+      // responseData = cleanJSONString(responseData);
 
       // Attempt to parse the JSON response
       let jsonResponse;
@@ -1019,25 +997,17 @@ app.post(
           .json({ error: "Error parsing objectivity JSON response" });
       }
 
-      // Validate the JSON structure
-      if (isObjectivityResponse(jsonResponse)) {
-        // Create article objectivity
-        const newArticleBias = await prismaLocalClient.objectivity_bias.create({
-          data: {
-            article_id: articleId,
-            analysis: jsonResponse.analysis,
-            rhetoric_score: jsonResponse.rhetoric_score,
-            footnotes: jsonResponse.footnotes,
-          },
-        });
-        console.info("Created article objectivity:", newArticleBias);
-        return res.json(newArticleBias);
-      } else {
-        console.error("Invalid objectivity JSON structure:", jsonResponse);
-        return res
-          .status(500)
-          .json({ error: "Invalid objectivity JSON structure" });
-      }
+      // Create article objectivity
+      const newArticleBias = await prismaLocalClient.objectivity_bias.create({
+        data: {
+          article_id: articleId,
+          analysis: jsonResponse.analysis,
+          rhetoric_score: jsonResponse.rhetoric_score,
+          footnotes: jsonResponse.footnotes,
+        },
+      });
+      console.info("Created article objectivity:", newArticleBias);
+      return res.json(newArticleBias);
     } catch (error) {
       console.error("Error analyzing objectivity:", error);
       return res.status(500).json({ error: "Error analyzing objectivity" });
