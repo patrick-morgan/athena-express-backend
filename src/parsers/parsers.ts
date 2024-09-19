@@ -20,7 +20,8 @@ const parsers: ParserMapType = {
  * @returns An instantiated parser object for the given URL
  */
 export const getParser = (url: string, html: string): BaseParser => {
-  const hostname = getHostname(url);
-  const ParserClass = parsers[hostname] || SmartParser;
+  // const hostname = getHostname(url);
+  // const ParserClass = parsers[hostname] || SmartParser;
+  const ParserClass = SmartParser;
   return new ParserClass(url, html);
 };
