@@ -1,16 +1,22 @@
 import { buildRequestPayload, gptApiCall } from "./prompts/chatgpt";
 import {
-  isPublicationMetadataResponse,
+  PublicationAnalysisResponse,
   PublicationAnalysisResponseSchema,
   publicationMetadataPrompt,
+  PublicationMetadataResponse,
 } from "./prompts/prompts";
 
 export const fetchPublicationMetadata = async (hostname: string) => {
   const prompt = publicationMetadataPrompt.replace("{hostname}", hostname);
 
+  // const requestPayload = buildRequestPayload(
+  //   prompt,
+  //   PublicationAnalysisResponseSchema
+  // );
   const requestPayload = buildRequestPayload(
     prompt,
-    PublicationAnalysisResponseSchema
+    PublicationAnalysisResponseSchema,
+    "publication_analysis"
   );
 
   // const requestPayload = {
@@ -26,36 +32,32 @@ export const fetchPublicationMetadata = async (hostname: string) => {
 
   try {
     const response = await gptApiCall(requestPayload);
-    const responseData = response.data.choices[0].message.content;
+    const pubAnalysis: PublicationMetadataResponse =
+      response.data.choices[0].message.parsed;
 
+    console.info("Hostname metadata JSON response:", pubAnalysis);
     // Attempt to parse the JSON response
-    let jsonResponse: any;
-    try {
-      jsonResponse = JSON.parse(responseData);
-      console.info("Hostname metadata JSON response:", jsonResponse);
-    } catch (parseError) {
-      console.error(
-        "Error parsing hostname metadata JSON response:",
-        parseError
-      );
-      throw new Error("Error parsing hostname metadata JSON response");
+    // let jsonResponse: any;
+    // try {
+    //   jsonResponse = JSON.parse(responseData);
+    //   console.info("Hostname metadata JSON response:", jsonResponse);
+    // } catch (parseError) {
+    //   console.error(
+    //     "Error parsing hostname metadata JSON response:",
+    //     parseError
+    //   );
+    //   throw new Error("Error parsing hostname metadata JSON response");
+    // }
+
+    // If any fields are "NULL" replace them with null
+    if (pubAnalysis.date_founded === "NULL") {
+      pubAnalysis.date_founded = null;
+    }
+    if (pubAnalysis.name === "NULL") {
+      pubAnalysis.name = null;
     }
 
-    // Validate the JSON structure
-    if (isPublicationMetadataResponse(jsonResponse)) {
-      // If any fields are "NULL" replace them with null
-      if (jsonResponse.date_founded === "NULL") {
-        jsonResponse.date_founded = null;
-      }
-      if (jsonResponse.name === "NULL") {
-        jsonResponse.name = null;
-      }
-
-      return jsonResponse;
-    } else {
-      console.error("Invalid hostname metadata JSON structure:", jsonResponse);
-      throw new Error("Invalid hostname metadata JSON structure");
-    }
+    return pubAnalysis;
   } catch (error) {
     console.error("Error fetching hostname metadata:", error);
     throw new Error("Error generating hostname metadata");

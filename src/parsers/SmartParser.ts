@@ -5,8 +5,8 @@ import { getHostname, parseDateString } from "./helpers";
 import { ArticleData } from "../types";
 import {
   HTMLParseResponse,
+  HTMLParseResponseSchema,
   buildHtmlParsingPrompt,
-  isHTMLParseResponse,
 } from "../prompts/prompts";
 import { buildRequestPayload, gptApiCall } from "../prompts/chatgpt";
 import { BaseParser } from "./BaseParser";
@@ -43,7 +43,12 @@ export class SmartParser extends BaseParser {
     const chunkPromises: Promise<AxiosResponse<any>>[] = [];
     chunks.forEach((chunk) => {
       const prompt = buildHtmlParsingPrompt(chunk);
-      const requestPayload = buildRequestPayload(prompt);
+      // const requestPayload = buildRequestPayload(prompt);
+      const requestPayload = buildRequestPayload(
+        prompt,
+        HTMLParseResponseSchema,
+        "html_parse"
+      );
       console.info("Request payload:", requestPayload);
       const promise = gptApiCall(requestPayload);
       chunkPromises.push(promise);
@@ -58,40 +63,23 @@ export class SmartParser extends BaseParser {
     let datePublished = "";
 
     responses.forEach((response, idx) => {
-      const data = response.data.choices[0].message.content;
-      console.info("Raw API response:", data);
+      const data: HTMLParseResponse = response.data.choices[0].message.parsed;
+      console.info("HTML parse response:", data);
 
-      // Attempt to parse the JSON response
-      let jsonResponse: any;
-      try {
-        jsonResponse = JSON.parse(data);
-      } catch (parseError) {
-        console.error(
-          `Error parsing JSON response for chunk ${idx}:`,
-          parseError
-        );
-        return;
+      if (!title) {
+        console.info("Setting title:", data.title);
+        title = data.title;
       }
-      // Validate the JSON structure
-      if (isHTMLParseResponse(jsonResponse)) {
-        console.info("HTML Parse Response:", jsonResponse);
-        if (!title) {
-          console.info("Setting title:", jsonResponse.title);
-          title = jsonResponse.title;
-        }
-        jsonResponse.authors.forEach((author: string) => {
-          console.info("Adding author:", author);
-          authorSet.add(author);
-        });
-        if (!datePublished) {
-          console.info("Setting date published:", jsonResponse.date_published);
-          datePublished = jsonResponse.date_published;
-        }
-        console.info("Adding content:", jsonResponse.content);
-        articleContent += jsonResponse.content;
-      } else {
-        console.error("Invalid HTML parse JSON structure:", jsonResponse);
+      data.authors.forEach((author: string) => {
+        console.info("Adding author:", author);
+        authorSet.add(author);
+      });
+      if (!datePublished) {
+        console.info("Setting date published:", data.date_published);
+        datePublished = data.date_published;
       }
+      console.info("Adding content:", data.content);
+      articleContent += data.content;
     });
 
     return {

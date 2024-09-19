@@ -1,63 +1,95 @@
 // prompts.ts
-
+import { z } from "zod";
+import { zodResponseFormat } from "openai/helpers/zod";
 import { JournalistAnalysisData, PublicationAnalysisData } from "./chatgpt";
 
 export const articleContentReplace = "[Insert article content here]";
 
 // JSON Schemas
-export const SummaryResponseSchema = {
-  type: "object",
-  properties: {
-    summary: { type: "string" },
-    footnotes: {
-      type: "object",
-      additionalProperties: { type: "string" },
-    },
-  },
-  required: ["summary", "footnotes"],
-};
+// export const SummaryResponseSchema = {
+//   type: "object",
+//   properties: {
+//     summary: { type: "string" },
+//     footnotes: {
+//       type: "object",
+//       additionalProperties: { type: "string" },
+//     },
+//   },
+//   required: ["summary", "footnotes"],
+// };
+export const SummaryResponseSchema = z.object({
+  summary: z.string(),
+  footnotes: z.record(z.string()),
+});
+export type SummaryResponse = z.infer<typeof SummaryResponseSchema>;
 
-export const PoliticalBiasResponseSchema = {
-  type: "object",
-  properties: {
-    bias_score: { type: "number" },
-    analysis: { type: "string" },
-    footnotes: {
-      type: "object",
-      additionalProperties: { type: "string" },
-    },
-  },
-  required: ["bias_score", "analysis", "footnotes"],
-};
+// export const PoliticalBiasResponseSchema = {
+//   type: "object",
+//   properties: {
+//     bias_score: { type: "number" },
+//     analysis: { type: "string" },
+//     footnotes: {
+//       type: "object",
+//       additionalProperties: { type: "string" },
+//     },
+//   },
+//   required: ["bias_score", "analysis", "footnotes"],
+// };
+export const PoliticalBiasResponseSchema = z.object({
+  bias_score: z.number(),
+  analysis: z.string(),
+  footnotes: z.record(z.string()),
+});
+export type PoliticalBiasResponse = z.infer<typeof PoliticalBiasResponseSchema>;
 
-export const ObjectivityBiasResponseSchema = {
-  type: "object",
-  properties: {
-    rhetoric_score: { type: "number" },
-    analysis: { type: "string" },
-    footnotes: {
-      type: "object",
-      additionalProperties: { type: "string" },
-    },
-  },
-  required: ["rhetoric_score", "analysis", "footnotes"],
-};
+// export const ObjectivityBiasResponseSchema = {
+//   type: "object",
+//   properties: {
+//     rhetoric_score: { type: "number" },
+//     analysis: { type: "string" },
+//     footnotes: {
+//       type: "object",
+//       additionalProperties: { type: "string" },
+//     },
+//   },
+//   required: ["rhetoric_score", "analysis", "footnotes"],
+// };
+export const ObjectivityBiasResponseSchema = z.object({
+  rhetoric_score: z.number(),
+  analysis: z.string(),
+  footnotes: z.record(z.string()),
+});
+export type ObjectivityBiasResponse = z.infer<
+  typeof ObjectivityBiasResponseSchema
+>;
 
-export const JournalistAnalysisResponseSchema = {
-  type: "object",
-  properties: {
-    analysis: { type: "string" },
-  },
-  required: ["analysis"],
-};
+// export const JournalistAnalysisResponseSchema = {
+//   type: "object",
+//   properties: {
+//     analysis: { type: "string" },
+//   },
+//   required: ["analysis"],
+// };
+export const JournalistAnalysisResponseSchema = z.object({
+  analysis: z.string(),
+});
+export type JournalistAnalysisResponse = z.infer<
+  typeof JournalistAnalysisResponseSchema
+>;
 
-export const PublicationAnalysisResponseSchema = {
-  type: "object",
-  properties: {
-    analysis: { type: "string" },
-  },
-  required: ["analysis"],
-};
+// export const PublicationAnalysisResponseSchema = {
+//   type: "object",
+//   properties: {
+//     analysis: { type: "string" },
+//   },
+//   required: ["analysis"],
+// };
+export const PublicationAnalysisResponseSchema = z.object({
+  analysis: z.string(),
+});
+export type PublicationAnalysisResponse = z.infer<
+  typeof PublicationAnalysisResponseSchema
+>;
 
 // Updated Prompts
 
@@ -120,24 +152,13 @@ Data:
 - Article Summaries: ${JSON.stringify(data.summaries)}
 `;
 
-export type HTMLParseResponse = {
-  title: string;
-  authors: string[];
-  date_published: string;
-  content: string;
-};
-
-export const isHTMLParseResponse = (json: any): json is HTMLParseResponse => {
-  return (
-    typeof json === "object" &&
-    json !== null &&
-    typeof json.title === "string" &&
-    Array.isArray(json.authors) &&
-    json.authors.every((author: string) => typeof author === "string") &&
-    typeof json.date_published === "string" &&
-    typeof json.content === "string"
-  );
-};
+export const HTMLParseResponseSchema = z.object({
+  title: z.string(),
+  authors: z.array(z.string()),
+  date_published: z.string(),
+  content: z.string(),
+});
+export type HTMLParseResponse = z.infer<typeof HTMLParseResponseSchema>;
 
 export const buildHtmlParsingPrompt = (htmlDomTree: string) => `
 Objective: Parse the given substring of an HTML DOM tree of a news article to extract the following fields: title, author(s), date of publication (or last updated date), and the article's main text content. The output should be in JSON format. Notice, that this is a substring of an HTML DOM tree, so you should not expect the full HTML structure including closing tags. If text (article content) is the end of the HTML DOM string, that is fine, just make sure to include it in the parsing.
@@ -147,18 +168,18 @@ ${htmlDomTree}
 
 Guidelines for Parsing:
 
-1. **Title**: Identify the title of the article. The title will not be in every chunk, it is normally in the first and will, therefore, be at the beginning of the article, and at the beginning of the DOM tree so most likely in the header tag, and further in the title tag. Many titles will contain the title followed by a line separator (usually | or -) and then the name of the publication. You do not need to include the separator or the publication if it is in this format and not an actual part of the title. If the title cannot be reasonably determined or does not appear ot be present, respond with an empty string "".
+1. **Title**: Identify the title of the article. The title will not be in every chunk, it is normally in the first and will, therefore, be at the beginning of the article, and at the beginning of the DOM tree so most likely in the header tag, and further in the title tag. Many titles will contain the title followed by a line separator (usually | or -) and then the name of the publication. You do not need to include the separator or the publication if it is in this format and not an actual part of the title. If the title cannot be reasonably determined or does not appear to be present, respond with an empty string "".
 2. **Author(s)**: Identify the author or authors of the article. If the author(s) cannot be reasonably determined, respond with an empty array []. The authors will likely not be in every single chunk, normally it is at the beginning or end of the article.
 3. **Date Published**: Extract the date the article was published or last updated. This date is often preceded by the word "published" or "updated". If the date cannot be reasonably determined, respond with an empty string "". The date will likely not be in every single chunk, normally it is at the beginning or end of the article. The date should be in the format "MM/DD/YYYY".
 4. **Article Text Content**: Extract the main text content of the article. This content should flow as a normal news article, excluding extraneous elements such as video/image captions, footer lists, copyright info, and other non-article text (e.g., "Breaking News", "Subscribe", etc.). The text should be concatenated as is, without changing punctuation or formatting. If the content cannot be reasonably determined, respond with an empty string "".
 
-Please return the output in the following JSON format without including any Markdown formatting or backticks, and ensure all newline characters within strings are properly escaped:
+Return your response in the following JSON format:
 
 {
-  "title": "string or """,
-  "authors": ["author name or multiple author names or []"],
-  "date_published": "MM/DD/YYYY or """,
-  "content": "string of the article content or """
+  "title": "string or ''",
+  "authors": ["author name", "or multiple author names", "or empty array []"],
+  "date_published": "MM/DD/YYYY or ''",
+  "content": "string of the article content or ''"
 }
 
 Parsing:
@@ -176,38 +197,46 @@ export type ArticleData = {
   subtitle?: string;
 };
 
-type PublicationMetadataResponse = {
-  name: string | null;
-  date_founded: string | null;
-};
+// type PublicationMetadataResponse = {
+//   name: string | null;
+//   date_founded: string | null;
+// };
+export const PublicationMetadataSchema = z.object({
+  name: z.string().nullable(),
+  date_founded: z.string().nullable(),
+});
 
-export const isPublicationMetadataResponse = (
-  json: any
-): json is PublicationMetadataResponse => {
-  return (
-    typeof json === "object" &&
-    json !== null &&
-    typeof json.name === "string" &&
-    typeof json.date_founded === "string"
-  );
-};
+export type PublicationMetadataResponse = z.infer<
+  typeof PublicationMetadataSchema
+>;
+
+// export const isPublicationMetadataResponse = (
+//   json: any
+// ): json is PublicationMetadataResponse => {
+//   return (
+//     typeof json === "object" &&
+//     json !== null &&
+//     typeof json.name === "string" &&
+//     typeof json.date_founded === "string"
+//   );
+// };
 
 export const publicationMetadataPrompt = `
-Given the hostname of a news company (e.g., www.cnn.com), return a JSON object containing metadata information on the news company. Do not include any Markdown formattign or code blocks in the output. The structure of the JSON object should be as follows:
+Given the hostname of a news company (e.g., www.cnn.com), return a JSON object containing metadata information on the news company. The structure of the JSON object should be as follows:
 
 {
-  name: string, // human-friendly name (or what news company is commonly referred as)
-  date_founded: string // in format MM/DD/YYYY
+  "name": string, // human-friendly name (or what news company is commonly referred as)
+  "date_founded": string // in format MM/DD/YYYY
 }
 
 For example, for "www.cnn.com" the correct response would be:
 
 {
-  name: "CNN",
-  date_founded: "06/01/1980"
+  "name": "CNN",
+  "date_founded": "06/01/1980"
 }
 
-If there is confusion or you cannot retrieve the proper human-readable name, please respond with the url but remove www. (e.g. www.github.com would be github.com) for the name field. If the date the news company was founded is not in your knowledge or is confusing/could have multiple interpretations, please also respond with "NULL" for the date_founded field.
+If there is confusion or you cannot retrieve the proper human-readable name, please respond with the url but remove www. (e.g. www.github.com would be github.com) for the name field. If the date the news company was founded is not in your knowledge or is confusing/could have multiple interpretations, please respond with null for the date_founded field.
 
 The accuracy of this information is important.
 
