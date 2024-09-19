@@ -1,20 +1,28 @@
-import { DEFAULT_LLM_MODEL, gptApiCall } from "./prompts/chatgpt";
+import { buildRequestPayload, gptApiCall } from "./prompts/chatgpt";
 import {
   isPublicationMetadataResponse,
+  PublicationAnalysisResponseSchema,
   publicationMetadataPrompt,
 } from "./prompts/prompts";
 
 export const fetchPublicationMetadata = async (hostname: string) => {
-  const requestPayload = {
-    model: DEFAULT_LLM_MODEL,
-    messages: [
-      {
-        role: "system",
-        content: publicationMetadataPrompt.replace("{hostname}", hostname),
-      },
-    ],
-    temperature: 0,
-  };
+  const prompt = publicationMetadataPrompt.replace("{hostname}", hostname);
+
+  const requestPayload = buildRequestPayload(
+    prompt,
+    PublicationAnalysisResponseSchema
+  );
+
+  // const requestPayload = {
+  //   model: DEFAULT_LLM_MODEL,
+  //   messages: [
+  //     {
+  //       role: "system",
+  //       content: publicationMetadataPrompt.replace("{hostname}", hostname),
+  //     },
+  //   ],
+  //   temperature: 0,
+  // };
 
   try {
     const response = await gptApiCall(requestPayload);

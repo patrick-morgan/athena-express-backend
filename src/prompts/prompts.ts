@@ -51,6 +51,14 @@ export const JournalistAnalysisResponseSchema = {
   required: ["analysis"],
 };
 
+export const PublicationAnalysisResponseSchema = {
+  type: "object",
+  properties: {
+    analysis: { type: "string" },
+  },
+  required: ["analysis"],
+};
+
 // Updated Prompts
 
 export const summaryPrompt = `

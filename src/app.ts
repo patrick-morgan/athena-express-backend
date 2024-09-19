@@ -22,6 +22,10 @@ import {
   objectivityPrompt,
   politicalBiasPrompt,
   summaryPrompt,
+  SummaryResponseSchema,
+  PoliticalBiasResponseSchema,
+  ObjectivityBiasResponseSchema,
+  JournalistAnalysisResponseSchema,
 } from "./prompts/prompts";
 import { fetchPublicationMetadata } from "./publication";
 import { ArticleData } from "./types";
@@ -848,7 +852,10 @@ app.post(
   "/generate-summary",
   async (req: Request<{}, {}, ArticlePayload>, res: Response) => {
     const { text, id: articleId } = req.body;
-    const requestPayload = buildRequestPayload(summaryPrompt);
+    const requestPayload = buildRequestPayload(
+      summaryPrompt,
+      SummaryResponseSchema
+    );
     try {
       // Get article summary if it exists
       const existingSummary = await prismaLocalClient.summary.findFirst({
@@ -904,7 +911,10 @@ app.post(
   "/analyze-political-bias",
   async (req: Request<{}, {}, ArticlePayload>, res: Response) => {
     const { id: articleId, text } = req.body;
-    const requestPayload = buildRequestPayload(politicalBiasPrompt);
+    const requestPayload = buildRequestPayload(
+      politicalBiasPrompt,
+      PoliticalBiasResponseSchema
+    );
     try {
       // Get article political bias if it exists
       const existingBias = await prismaLocalClient.polarization_bias.findFirst({
@@ -964,7 +974,10 @@ app.post(
   "/analyze-objectivity",
   async (req: Request<{}, {}, ArticlePayload>, res: Response) => {
     const { id: articleId, text } = req.body;
-    const requestPayload = buildRequestPayload(objectivityPrompt);
+    const requestPayload = buildRequestPayload(
+      objectivityPrompt,
+      ObjectivityBiasResponseSchema
+    );
     try {
       // Get article objectivity if it exists
       const existingBias = await prismaLocalClient.objectivity_bias.findFirst({
