@@ -4,27 +4,23 @@ import { JournalistAnalysisData, PublicationAnalysisData } from "./chatgpt";
 
 export const articleContentReplace = "[Insert article content here]";
 
-// export const FootNotesObject = z.object({
-
-// })
 export const SummaryResponseSchema = z.object({
   summary: z.string(),
   footnotes: z.object({}).catchall(z.string()),
-  // footnotes: z.record(z.string()),
 });
 export type SummaryResponse = z.infer<typeof SummaryResponseSchema>;
 
 export const PoliticalBiasResponseSchema = z.object({
   bias_score: z.number(),
   analysis: z.string(),
-  footnotes: z.record(z.string()),
+  footnotes: z.object({}).catchall(z.string()),
 });
 export type PoliticalBiasResponse = z.infer<typeof PoliticalBiasResponseSchema>;
 
 export const ObjectivityBiasResponseSchema = z.object({
   rhetoric_score: z.number(),
   analysis: z.string(),
-  footnotes: z.record(z.string()),
+  footnotes: z.object({}).catchall(z.string()),
 });
 export type ObjectivityBiasResponse = z.infer<
   typeof ObjectivityBiasResponseSchema
@@ -148,10 +144,6 @@ export type ArticleData = {
   subtitle?: string;
 };
 
-// type PublicationMetadataResponse = {
-//   name: string | null;
-//   date_founded: string | null;
-// };
 export const PublicationMetadataSchema = z.object({
   name: z.string().nullable(),
   date_founded: z.string().nullable(),
@@ -160,17 +152,6 @@ export const PublicationMetadataSchema = z.object({
 export type PublicationMetadataResponse = z.infer<
   typeof PublicationMetadataSchema
 >;
-
-// export const isPublicationMetadataResponse = (
-//   json: any
-// ): json is PublicationMetadataResponse => {
-//   return (
-//     typeof json === "object" &&
-//     json !== null &&
-//     typeof json.name === "string" &&
-//     typeof json.date_founded === "string"
-//   );
-// };
 
 export const publicationMetadataPrompt = `
 Given the hostname of a news company (e.g., www.cnn.com), return a JSON object containing metadata information on the news company. The structure of the JSON object should be as follows:
