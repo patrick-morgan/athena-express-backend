@@ -73,6 +73,10 @@ export const gptApiCall = async ({
   zodSchema,
   propertyName,
 }: RequestPayloadType) => {
+  console.log(
+    "FISH ZOD RESPONSE SCHEMA",
+    zodResponseFormat(zodSchema, propertyName)
+  );
   const completion = openai.beta.chat.completions.parse({
     model: DEFAULT_LLM_MODEL,
     messages: [
