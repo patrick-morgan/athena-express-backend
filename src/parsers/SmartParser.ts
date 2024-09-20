@@ -43,6 +43,7 @@ export class SmartParser extends BaseParser {
 
     const chunkPromises: Promise<ParsedChatCompletion<any>>[] = [];
     chunks.forEach((chunk) => {
+      console.log("parsing CHUNK");
       const prompt = buildHtmlParsingPrompt(chunk);
       const requestPayload = {
         prompt,
