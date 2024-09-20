@@ -879,6 +879,7 @@ app.post(
         data: {
           article_id: articleId,
           summary: responseData.summary,
+          // footnotes: {},
           footnotes: responseData.footnotes,
         },
       });

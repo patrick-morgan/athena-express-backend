@@ -9,7 +9,8 @@ export const articleContentReplace = "[Insert article content here]";
 // })
 export const SummaryResponseSchema = z.object({
   summary: z.string(),
-  footnotes: z.record(z.string()),
+  footnotes: z.object({}).catchall(z.string()),
+  // footnotes: z.record(z.string()),
 });
 export type SummaryResponse = z.infer<typeof SummaryResponseSchema>;
 

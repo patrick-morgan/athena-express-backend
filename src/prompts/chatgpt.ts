@@ -10,6 +10,7 @@ import {
 import { z } from "zod";
 import { zodResponseFormat } from "openai/helpers/zod";
 import OpenAI from "openai";
+import { zodToJsonSchema } from "zod-to-json-schema";
 
 export const DEFAULT_LLM_MODEL = "gpt-4o-mini";
 
@@ -73,10 +74,17 @@ export const gptApiCall = async ({
   zodSchema,
   propertyName,
 }: RequestPayloadType) => {
-  const format = zodResponseFormat(zodSchema, propertyName);
-  console.log("FISH ZOD RESPONSE SCHEMA", format);
-  console.log(JSON.stringify(format.json_schema.schema));
-  console.log(format.json_schema.schema);
+  // const format = zodResponseFormat(zodSchema, propertyName);
+  // console.log("FISH ZOD RESPONSE SCHEMA", format);
+  // console.log(JSON.stringify(format.json_schema.schema));
+  // console.log(format.json_schema.schema);
+  const responseFormat = zodResponseFormat(zodSchema, propertyName);
+  console.log(
+    "Generated schema:",
+    JSON.stringify(zodToJsonSchema(zodSchema), null, 2)
+  );
+  console.log("Response format:", JSON.stringify(responseFormat, null, 2));
+
   const completion = openai.beta.chat.completions.parse({
     model: DEFAULT_LLM_MODEL,
     messages: [
