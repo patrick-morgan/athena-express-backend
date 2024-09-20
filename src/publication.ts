@@ -1,34 +1,12 @@
 import { gptApiCall } from "./prompts/chatgpt";
 import {
-  PublicationAnalysisResponse,
+  buildPublicationMetadataPrompt,
   PublicationAnalysisResponseSchema,
-  publicationMetadataPrompt,
   PublicationMetadataResponse,
 } from "./prompts/prompts";
 
 export const fetchPublicationMetadata = async (hostname: string) => {
-  const prompt = publicationMetadataPrompt.replace("{hostname}", hostname);
-
-  // const requestPayload = buildRequestPayload(
-  //   prompt,
-  //   PublicationAnalysisResponseSchema
-  // );
-  // const requestPayload = buildRequestPayload(
-  //   prompt,
-  //   PublicationAnalysisResponseSchema,
-  //   "publication_analysis"
-  // );
-
-  // const requestPayload = {
-  //   model: DEFAULT_LLM_MODEL,
-  //   messages: [
-  //     {
-  //       role: "system",
-  //       content: publicationMetadataPrompt.replace("{hostname}", hostname),
-  //     },
-  //   ],
-  //   temperature: 0,
-  // };
+  const prompt = buildPublicationMetadataPrompt(hostname);
 
   const requestPayload = {
     prompt,
@@ -41,24 +19,12 @@ export const fetchPublicationMetadata = async (hostname: string) => {
       response.choices[0].message.parsed;
 
     console.info("Hostname metadata JSON response:", pubAnalysis);
-    // Attempt to parse the JSON response
-    // let jsonResponse: any;
-    // try {
-    //   jsonResponse = JSON.parse(responseData);
-    //   console.info("Hostname metadata JSON response:", jsonResponse);
-    // } catch (parseError) {
-    //   console.error(
-    //     "Error parsing hostname metadata JSON response:",
-    //     parseError
-    //   );
-    //   throw new Error("Error parsing hostname metadata JSON response");
-    // }
 
-    // If any fields are "NULL" replace them with null
-    if (pubAnalysis.date_founded === "NULL") {
+    // If any fields are "" replace them with null
+    if (pubAnalysis.date_founded === "") {
       pubAnalysis.date_founded = null;
     }
-    if (pubAnalysis.name === "NULL") {
+    if (pubAnalysis.name === "") {
       pubAnalysis.name = null;
     }
 
