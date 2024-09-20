@@ -4,6 +4,9 @@ import { JournalistAnalysisData, PublicationAnalysisData } from "./chatgpt";
 
 export const articleContentReplace = "[Insert article content here]";
 
+// export const FootNotesObject = z.object({
+
+// })
 export const SummaryResponseSchema = z.object({
   summary: z.string(),
   footnotes: z.record(z.string()),

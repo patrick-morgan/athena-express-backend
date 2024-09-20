@@ -857,6 +857,7 @@ app.post(
       zodSchema: SummaryResponseSchema,
       propertyName: "summary",
     };
+    console.info("Request payload:", requestPayload);
 
     try {
       // Get article summary if it exists
@@ -869,6 +870,7 @@ app.post(
       }
 
       const response = await gptApiCall(requestPayload);
+      console.log("FISH SUMMARY RESPONSE", response);
       let responseData: SummaryResponse = response.choices[0].message.parsed;
       console.info("Summary JSON response:", responseData);
 
