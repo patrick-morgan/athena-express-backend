@@ -1,40 +1,15 @@
 // prompts.ts
 import { z } from "zod";
-import { zodResponseFormat } from "openai/helpers/zod";
 import { JournalistAnalysisData, PublicationAnalysisData } from "./chatgpt";
 
 export const articleContentReplace = "[Insert article content here]";
 
-// JSON Schemas
-// export const SummaryResponseSchema = {
-//   type: "object",
-//   properties: {
-//     summary: { type: "string" },
-//     footnotes: {
-//       type: "object",
-//       additionalProperties: { type: "string" },
-//     },
-//   },
-//   required: ["summary", "footnotes"],
-// };
 export const SummaryResponseSchema = z.object({
   summary: z.string(),
   footnotes: z.record(z.string()),
 });
 export type SummaryResponse = z.infer<typeof SummaryResponseSchema>;
 
-// export const PoliticalBiasResponseSchema = {
-//   type: "object",
-//   properties: {
-//     bias_score: { type: "number" },
-//     analysis: { type: "string" },
-//     footnotes: {
-//       type: "object",
-//       additionalProperties: { type: "string" },
-//     },
-//   },
-//   required: ["bias_score", "analysis", "footnotes"],
-// };
 export const PoliticalBiasResponseSchema = z.object({
   bias_score: z.number(),
   analysis: z.string(),
@@ -42,18 +17,6 @@ export const PoliticalBiasResponseSchema = z.object({
 });
 export type PoliticalBiasResponse = z.infer<typeof PoliticalBiasResponseSchema>;
 
-// export const ObjectivityBiasResponseSchema = {
-//   type: "object",
-//   properties: {
-//     rhetoric_score: { type: "number" },
-//     analysis: { type: "string" },
-//     footnotes: {
-//       type: "object",
-//       additionalProperties: { type: "string" },
-//     },
-//   },
-//   required: ["rhetoric_score", "analysis", "footnotes"],
-// };
 export const ObjectivityBiasResponseSchema = z.object({
   rhetoric_score: z.number(),
   analysis: z.string(),
@@ -63,13 +26,6 @@ export type ObjectivityBiasResponse = z.infer<
   typeof ObjectivityBiasResponseSchema
 >;
 
-// export const JournalistAnalysisResponseSchema = {
-//   type: "object",
-//   properties: {
-//     analysis: { type: "string" },
-//   },
-//   required: ["analysis"],
-// };
 export const JournalistAnalysisResponseSchema = z.object({
   analysis: z.string(),
 });
@@ -77,13 +33,6 @@ export type JournalistAnalysisResponse = z.infer<
   typeof JournalistAnalysisResponseSchema
 >;
 
-// export const PublicationAnalysisResponseSchema = {
-//   type: "object",
-//   properties: {
-//     analysis: { type: "string" },
-//   },
-//   required: ["analysis"],
-// };
 export const PublicationAnalysisResponseSchema = z.object({
   analysis: z.string(),
 });
@@ -91,33 +40,31 @@ export type PublicationAnalysisResponse = z.infer<
   typeof PublicationAnalysisResponseSchema
 >;
 
-// Updated Prompts
-
-export const summaryPrompt = `
+export const buildSummaryPrompt = (articleContent: string) => `
 Generate a concise and accurate summary of the given news article, highlighting the main points, key arguments, and significant evidence. Use footnotes to cite specific parts of the article, with footnotes containing the exact text from the article for highlighting purposes. If the content is not a news article, generate a summary and note that it may not be news content.
 
 **Please present the summary as markdown-formatted bullet points in the 'summary' field of the JSON output.**
 
 Article Content:
-${articleContentReplace}
+${articleContent}
 `;
 
-export const politicalBiasPrompt = `
+export const buildPoliticalBiasPrompt = (articleContent: string) => `
 Analyze the given news article for political bias and assign a bias score from 0 to 100 (0 = very left-wing, 50 = moderate, 100 = very right-wing). Provide specific examples from the article that illustrate the bias, using footnotes containing the exact text from the article for highlighting purposes. If the article is not a news article or political bias is not relevant, assign a bias score of 50, explain why in the analysis, and provide an empty object for footnotes.
 
 **Please present the analysis as markdown-formatted bullet points in the 'analysis' field of the JSON output.**
 
 Article Content:
-${articleContentReplace}
+${articleContent}
 `;
 
-export const objectivityPrompt = `
+export const buildObjectivityPrompt = (articleContent: string) => `
 Analyze the given news article to determine how opinionated or factual it is, assigning a rhetoric score from 0 to 100 (0 = very opinionated, 100 = very factual). Provide specific examples from the article that illustrate the level of opinionation or factuality, using footnotes containing the exact text from the article for highlighting purposes. If the article is not a news article or objectivity analysis is not relevant, assign a rhetoric score of 100, explain why in the analysis, and provide an empty object for footnotes.
 
 **Please present the analysis as markdown-formatted bullet points in the 'analysis' field of the JSON output.**
 
 Article Content:
-${articleContentReplace}
+${articleContent}
 `;
 
 export const buildJournalistAnalysisPrompt = (data: JournalistAnalysisData) => `

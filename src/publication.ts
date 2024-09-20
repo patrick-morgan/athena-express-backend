@@ -1,4 +1,4 @@
-import { buildRequestPayload, gptApiCall } from "./prompts/chatgpt";
+import { gptApiCall } from "./prompts/chatgpt";
 import {
   PublicationAnalysisResponse,
   PublicationAnalysisResponseSchema,
@@ -13,11 +13,11 @@ export const fetchPublicationMetadata = async (hostname: string) => {
   //   prompt,
   //   PublicationAnalysisResponseSchema
   // );
-  const requestPayload = buildRequestPayload(
-    prompt,
-    PublicationAnalysisResponseSchema,
-    "publication_analysis"
-  );
+  // const requestPayload = buildRequestPayload(
+  //   prompt,
+  //   PublicationAnalysisResponseSchema,
+  //   "publication_analysis"
+  // );
 
   // const requestPayload = {
   //   model: DEFAULT_LLM_MODEL,
@@ -30,10 +30,15 @@ export const fetchPublicationMetadata = async (hostname: string) => {
   //   temperature: 0,
   // };
 
+  const requestPayload = {
+    prompt,
+    zodSchema: PublicationAnalysisResponseSchema,
+    propertyName: "publication_analysis",
+  };
   try {
     const response = await gptApiCall(requestPayload);
     const pubAnalysis: PublicationMetadataResponse =
-      response.data.choices[0].message.parsed;
+      response.choices[0].message.parsed;
 
     console.info("Hostname metadata JSON response:", pubAnalysis);
     // Attempt to parse the JSON response

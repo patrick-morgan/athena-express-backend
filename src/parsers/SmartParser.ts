@@ -1,6 +1,6 @@
 // import * as cheerio from "cheerio";
 // https://github.com/cheeriojs/cheerio/issues/1407
-const cheerio = require("cheerio");
+// const cheerio = require("cheerio");
 import { getHostname, parseDateString } from "./helpers";
 import { ArticleData } from "../types";
 import {
@@ -8,9 +8,10 @@ import {
   HTMLParseResponseSchema,
   buildHtmlParsingPrompt,
 } from "../prompts/prompts";
-import { buildRequestPayload, gptApiCall } from "../prompts/chatgpt";
+import { gptApiCall } from "../prompts/chatgpt";
 import { BaseParser } from "./BaseParser";
 import { AxiosResponse } from "axios";
+import { ParsedChatCompletion } from "openai/resources/beta/chat/completions";
 
 /** Smart parser using LLMs to parser article */
 export class SmartParser extends BaseParser {
@@ -40,15 +41,14 @@ export class SmartParser extends BaseParser {
 
     console.info("Chunks:", chunks);
 
-    const chunkPromises: Promise<AxiosResponse<any>>[] = [];
+    const chunkPromises: Promise<ParsedChatCompletion<any>>[] = [];
     chunks.forEach((chunk) => {
       const prompt = buildHtmlParsingPrompt(chunk);
-      // const requestPayload = buildRequestPayload(prompt);
-      const requestPayload = buildRequestPayload(
+      const requestPayload = {
         prompt,
-        HTMLParseResponseSchema,
-        "html_parse"
-      );
+        zodSchema: HTMLParseResponseSchema,
+        propertyName: "html_parse",
+      };
       console.info("Request payload:", requestPayload);
       const promise = gptApiCall(requestPayload);
       chunkPromises.push(promise);
@@ -63,8 +63,7 @@ export class SmartParser extends BaseParser {
     let datePublished = "";
 
     responses.forEach((response, idx) => {
-      const data: HTMLParseResponse = response.data.choices[0].message.parsed;
-      console.log("content response", response.data.choices[0].message.content);
+      const data: HTMLParseResponse = response.choices[0].message.parsed;
       console.info("HTML parse response:", data);
 
       if (!title) {

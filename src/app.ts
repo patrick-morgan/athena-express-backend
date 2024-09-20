@@ -14,20 +14,18 @@ import {
   PublicationAnalysisData,
   analyzeJournalistBias,
   analyzePublicationBias,
-  buildRequestPayload,
   gptApiCall,
 } from "./prompts/chatgpt";
 import {
-  articleContentReplace,
-  objectivityPrompt,
-  politicalBiasPrompt,
-  summaryPrompt,
   SummaryResponseSchema,
   PoliticalBiasResponseSchema,
   ObjectivityBiasResponseSchema,
   SummaryResponse,
   PoliticalBiasResponse,
   ObjectivityBiasResponse,
+  buildSummaryPrompt,
+  buildPoliticalBiasPrompt,
+  buildObjectivityPrompt,
 } from "./prompts/prompts";
 import { fetchPublicationMetadata } from "./publication";
 import { ArticleData } from "./types";
@@ -854,11 +852,12 @@ app.post(
   "/generate-summary",
   async (req: Request<{}, {}, ArticlePayload>, res: Response) => {
     const { text, id: articleId } = req.body;
-    const requestPayload = buildRequestPayload(
-      summaryPrompt,
-      SummaryResponseSchema,
-      "summary"
-    );
+    const requestPayload = {
+      prompt: buildSummaryPrompt(text),
+      zodSchema: SummaryResponseSchema,
+      propertyName: "summary",
+    };
+
     try {
       // Get article summary if it exists
       const existingSummary = await prismaLocalClient.summary.findFirst({
@@ -869,14 +868,8 @@ app.post(
         return res.json(existingSummary);
       }
 
-      // Create article summary
-      // Update the article content in the request payload
-      requestPayload.messages[0].content =
-        requestPayload.messages[0].content.replace(articleContentReplace, text);
-
       const response = await gptApiCall(requestPayload);
-      let responseData: SummaryResponse =
-        response.data.choices[0].message.parsed;
+      let responseData: SummaryResponse = response.choices[0].message.parsed;
       console.info("Summary JSON response:", responseData);
 
       // Create the article summary
@@ -900,11 +893,12 @@ app.post(
   "/analyze-political-bias",
   async (req: Request<{}, {}, ArticlePayload>, res: Response) => {
     const { id: articleId, text } = req.body;
-    const requestPayload = buildRequestPayload(
-      politicalBiasPrompt,
-      PoliticalBiasResponseSchema,
-      "political_bias"
-    );
+    const requestPayload = {
+      prompt: buildPoliticalBiasPrompt(text),
+      zodSchema: PoliticalBiasResponseSchema,
+      propertyName: "political_bias",
+    };
+
     try {
       // Get article political bias if it exists
       const existingBias = await prismaLocalClient.polarization_bias.findFirst({
@@ -915,14 +909,9 @@ app.post(
         return res.json(existingBias);
       }
 
-      // Create article political bias
-      // Update the article content in the request payload
-      requestPayload.messages[0].content =
-        requestPayload.messages[0].content.replace(articleContentReplace, text);
-
       const response = await gptApiCall(requestPayload);
       let responseData: PoliticalBiasResponse =
-        response.data.choices[0].message.parsed;
+        response.choices[0].message.parsed;
       console.info("Political bias JSON response:", responseData);
 
       // Create article political bias
@@ -947,11 +936,11 @@ app.post(
   "/analyze-objectivity",
   async (req: Request<{}, {}, ArticlePayload>, res: Response) => {
     const { id: articleId, text } = req.body;
-    const requestPayload = buildRequestPayload(
-      objectivityPrompt,
-      ObjectivityBiasResponseSchema,
-      "objectivity_bias"
-    );
+    const requestPayload = {
+      prompt: buildObjectivityPrompt(text),
+      zodSchema: ObjectivityBiasResponseSchema,
+      propertyName: "objectivity_bias",
+    };
     try {
       // Get article objectivity if it exists
       const existingBias = await prismaLocalClient.objectivity_bias.findFirst({
@@ -961,14 +950,10 @@ app.post(
         console.info("Existing article objectivity:", existingBias);
         return res.json(existingBias);
       }
-      // Create article objectivity
-      // Update the article content in the request payload
-      requestPayload.messages[0].content =
-        requestPayload.messages[0].content.replace(articleContentReplace, text);
 
       const response = await gptApiCall(requestPayload);
       let responseData: ObjectivityBiasResponse =
-        response.data.choices[0].message.parsed;
+        response.choices[0].message.parsed;
       console.info("Objectivity JSON response:", responseData);
 
       // Create article objectivity

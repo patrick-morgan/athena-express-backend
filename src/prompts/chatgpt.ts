@@ -9,24 +9,30 @@ import {
 } from "./prompts";
 import { z } from "zod";
 import { zodResponseFormat } from "openai/helpers/zod";
-
-type RequestPayloadType = {
-  model: string;
-  messages: {
-    role: string;
-    content: string;
-  }[];
-  temperature: number;
-  response_format?: {
-    type: string;
-    json_schema?: object;
-  };
-};
+import OpenAI from "openai";
 
 export const DEFAULT_LLM_MODEL = "gpt-4o-mini";
 
-// export const buildRequestPayload = (prompt: string, jsonSchema?: object) => {
-//   // Define the request payload
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// type RequestPayloadType = {
+//   model: string;
+//   messages: {
+//     role: string;
+//     content: string;
+//   }[];
+//   temperature: number;
+//   response_format?: {
+//     type: string;
+//     json_schema?: object;
+//   };
+// };
+
+// export const buildRequestPayload = (
+//   prompt: string,
+//   zodSchema: z.ZodType,
+//   propertyName: string
+// ) => {
 //   const requestPayload: RequestPayloadType = {
 //     model: DEFAULT_LLM_MODEL,
 //     messages: [
@@ -36,49 +42,49 @@ export const DEFAULT_LLM_MODEL = "gpt-4o-mini";
 //       },
 //     ],
 //     temperature: 0,
+//     response_format: zodResponseFormat(zodSchema, propertyName),
 //   };
-
-//   if (jsonSchema) {
-//     requestPayload.response_format = {
-//       type: "json_schema",
-//       json_schema: jsonSchema,
-//     };
-//   }
 
 //   return requestPayload;
 // };
-export const buildRequestPayload = (
-  prompt: string,
-  zodSchema: z.ZodType,
-  propertyName: string
-) => {
-  const requestPayload: RequestPayloadType = {
+
+// export const gptApiCall = async (requestPayload: RequestPayloadType) => {
+//   const response = await axios.post(
+//     "https://api.openai.com/v1/chat/completions",
+//     requestPayload,
+//     {
+//       headers: {
+//         "Content-Type": "application/json",
+//         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+//       },
+//     }
+//   );
+//   return response;
+// };
+
+type RequestPayloadType = {
+  prompt: string;
+  zodSchema: z.ZodType;
+  propertyName: string;
+};
+
+export const gptApiCall = async ({
+  prompt,
+  zodSchema,
+  propertyName,
+}: RequestPayloadType) => {
+  const completion = openai.beta.chat.completions.parse({
     model: DEFAULT_LLM_MODEL,
     messages: [
-      {
-        role: "system",
-        content: prompt,
-      },
+      { role: "system", content: prompt },
+      // { role: "user", content: "Alice and Bob are going to a science fair on Friday." },
     ],
     temperature: 0,
     response_format: zodResponseFormat(zodSchema, propertyName),
-  };
-
-  return requestPayload;
-};
-
-export const gptApiCall = async (requestPayload: RequestPayloadType) => {
-  const response = await axios.post(
-    "https://api.openai.com/v1/chat/completions",
-    requestPayload,
-    {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-    }
-  );
-  return response;
+  });
+  return completion;
+  // const response = completion.choices[0].message.parsed;
+  // return response;
 };
 
 export type PublicationAnalysisData = {
@@ -92,16 +98,21 @@ export const analyzePublicationBias = async (
 ): Promise<PublicationAnalysisResponse | null> => {
   const prompt = buildPublicationAnalysisPrompt(data);
 
-  const requestPayload = buildRequestPayload(
+  // const requestPayload = buildRequestPayload(
+  //   prompt,
+  //   PublicationAnalysisResponseSchema,
+  //   "publication_analysis"
+  // );
+  const requestPayload = {
     prompt,
-    PublicationAnalysisResponseSchema,
-    "publication_analysis"
-  );
+    zodSchema: PublicationAnalysisResponseSchema,
+    propertyName: "publication_analysis",
+  };
 
   try {
     const response = await gptApiCall(requestPayload);
     const responseData: PublicationAnalysisResponse =
-      response.data.choices[0].message.parsed;
+      response.choices[0].message.parsed;
     console.info("Publication analysis response:", responseData);
 
     return responseData;
@@ -122,16 +133,21 @@ export const analyzeJournalistBias = async (
 ): Promise<JournalistAnalysisResponse | null> => {
   const prompt = buildJournalistAnalysisPrompt(data);
 
-  const requestPayload = buildRequestPayload(
+  // const requestPayload = buildRequestPayload(
+  //   prompt,
+  //   JournalistAnalysisResponseSchema,
+  //   "journalist_analysis"
+  // );
+  const requestPayload = {
     prompt,
-    JournalistAnalysisResponseSchema,
-    "journalist_analysis"
-  );
+    zodSchema: JournalistAnalysisResponseSchema,
+    propertyName: "journalist_analysis",
+  };
 
   try {
     const response = await gptApiCall(requestPayload);
     const responseData: JournalistAnalysisResponse =
-      response.data.choices[0].message.parsed;
+      response.choices[0].message.parsed;
     console.info("Journalist analysis response:", responseData);
 
     return responseData;
