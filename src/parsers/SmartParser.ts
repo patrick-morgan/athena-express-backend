@@ -64,6 +64,7 @@ export class SmartParser extends BaseParser {
 
     responses.forEach((response, idx) => {
       const data: HTMLParseResponse = response.data.choices[0].message.parsed;
+      console.log("content response", response.data.choices[0].message.content);
       console.info("HTML parse response:", data);
 
       if (!title) {
