@@ -43,7 +43,7 @@ export type PublicationAnalysisResponse = z.infer<
 export const buildSummaryPrompt = (articleContent: string) => `
 Generate a concise and accurate summary of the given news article, highlighting the main points, key arguments, and significant evidence. Use footnotes to cite specific parts of the article, with footnotes containing the exact text from the article for highlighting purposes. If the content is not a news article, generate a summary and note that it may not be news content.
 
-**Please present the summary as markdown-formatted bullet points in the 'summary' field of the JSON output.**
+**Please present the summary as markdown-formatted bullet points with references to the footnotes using format [^1] for example to reference the first footnote.**
 
 Article Content:
 ${articleContent}
