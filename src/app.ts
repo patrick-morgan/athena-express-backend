@@ -57,7 +57,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: "10mb" }));
 
 // Use JSON body parser for all routes except the webhook
 app.use((req, res, next) => {
