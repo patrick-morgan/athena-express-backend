@@ -508,8 +508,13 @@ app.post(
         console.info("Publication metadata:", metadata);
 
         if (metadata.date_founded) {
-          const [month, day, year] = metadata.date_founded.split("/");
-          metadata.date_founded = `${year}-${month}-${day}`;
+          try {
+            const [month, day, year] = metadata.date_founded.split("/");
+            metadata.date_founded = `${year}-${month}-${day}`;
+          } catch (e) {
+            console.error("Error parsing publication metadata date:", e);
+            metadata.date_founded = null;
+          }
         }
 
         publication = await prismaLocalClient.publication.create({
