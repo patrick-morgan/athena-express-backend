@@ -27,6 +27,8 @@ export const chunkContent = (content: string) => {
  * @returns Date object | null
  */
 export const parseDateString = (dateStr: string): Date | null => {
+  if (!dateStr) return null;
+
   const [month, day, year] = dateStr.split("/").map(Number);
 
   // Check for invalid date parts
