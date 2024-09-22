@@ -57,14 +57,15 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-// app.use(bodyParser.json());
+app.use(bodyParser.json());
 
 // Use JSON body parser for all routes except the webhook
 app.use((req, res, next) => {
   if (req.originalUrl === "/stripe-webhook") {
     next();
   } else {
-    bodyParser.json()(req, res, next);
+    // bodyParser.json()(req, res, next);
+    bodyParser.json({ limit: "10mb" })(req, res, next);
   }
 });
 
