@@ -507,7 +507,7 @@ app.post(
         const metadata = await fetchPublicationMetadata(hostname);
         console.info("Publication metadata:", metadata);
 
-        if (metadata.date_founded !== null) {
+        if (metadata.date_founded) {
           const [month, day, year] = metadata.date_founded.split("/");
           metadata.date_founded = `${year}-${month}-${day}`;
         }

@@ -125,7 +125,7 @@ export class SmartParser extends BaseParser {
     return {
       title,
       authors,
-      date: datePublishedObject ?? new Date(),
+      date: datePublishedObject || new Date(),
       hostname,
       url: this.url,
       text: cleanedContent,
