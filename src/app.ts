@@ -628,8 +628,8 @@ app.post(
     // Create publication bias
     const articleIds = articles.map((article) => article.id);
     const analysis: PublicationAnalysisData = {
-      averagePolarization: 0.5,
-      averageObjectivity: 0.5,
+      averagePolarization: 50,
+      averageObjectivity: 50,
       summaries: [],
     };
     const polarizationBiases =
@@ -770,8 +770,8 @@ app.post(
       // Average bias score of all articles this journalist has written
       const analysis: JournalistAnalysisData = {
         // journalist: journalist.id,
-        averagePolarization: 0.5,
-        averageObjectivity: 0.5,
+        averagePolarization: 50,
+        averageObjectivity: 50,
         summaries: [],
       };
 
