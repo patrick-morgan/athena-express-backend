@@ -103,12 +103,13 @@ export const HTMLParseResponseSchema = z.object({
   title: z.string(),
   authors: z.array(z.string()),
   date_published: z.string(),
+  date_updated: z.string(),
   content: z.string(),
 });
 export type HTMLParseResponse = z.infer<typeof HTMLParseResponseSchema>;
 
 export const buildHtmlParsingPrompt = (htmlDomTree: string) => `
-Objective: Parse the given substring of an HTML DOM tree of a news article to extract the following fields: title, author(s), date of publication (or last updated date), and the article's main text content. Notice, that this is a substring of an HTML DOM tree, so you should not expect the full HTML structure including closing tags. If text (article content) is the end of the HTML DOM string, that is fine, just make sure to include it in the parsing.
+Objective: Parse the given substring of an HTML DOM tree of a news article to extract the following fields: title, author(s), date of publication, date of last update, and the article's main text content. Notice, that this is a substring of an HTML DOM tree, so you should not expect the full HTML structure including closing tags. If text (article content) is the end of the HTML DOM string, that is fine, just make sure to include it in the parsing.
 
 HTML DOM Substring:
 ${htmlDomTree}
@@ -118,6 +119,7 @@ Guidelines for Parsing:
 1. **Title**: Identify the title of the article. The title will not be in every chunk, it is normally in the first and will, therefore, be at the beginning of the article, and at the beginning of the DOM tree so most likely in the header tag, and further in the title tag. Many titles will contain the title followed by a line separator (usually | or -) and then the name of the publication. You do not need to include the separator or the publication if it is in this format and not an actual part of the title. If the title cannot be reasonably determined or does not appear to be present, respond with an empty string "".
 2. **Author(s)**: Identify the author or authors of the article and respond with their names in format ["author name", "or multiple author names", "or empty array []"]. If the author(s) cannot be reasonably determined, respond with an empty array []. The authors will likely not be in every single chunk, normally it is at the beginning or end of the article. Some author's names will appear to have the publication before it (e.g. CNN's John Doe), in this case, only include the author's name and not the publication.
 3. **Date Published**: Extract the date and time the article was published or last updated. This date is often preceded by the word "published" or "updated". If the date cannot be reasonably determined, respond with an empty string "". The date will likely not be in every single chunk, normally it is at the beginning or end of the article. Format the date and time as an ISO 8601 string (e.g., "2024-09-26T14:30:00Z"). If only the date is available without a specific time, use midnight UTC (e.g., "2024-09-26T00:00:00Z"). If the time zone is specified, convert to UTC. If no time zone is specified, assume it's in the local time of the publication and append 'Z' to indicate UTC.
+4. **Date Updated**: Extract the date and time the article was last updated, if available. This date is often preceded by words like "updated" or "last modified". Format it the same way as the Date Published. If there's no separate update date or it cannot be determined, respond with an empty string "".
 4. **Article Text Content**: Extract the main text content of the article. This content should flow as a normal news article, excluding extraneous elements such as video/image captions, footer lists, copyright info, and other non-article text (e.g., "Breaking News", "Subscribe", etc.). The text should be concatenated as is, without changing punctuation or formatting. If the content cannot be reasonably determined, respond with an empty string ''.
 
 Please parse the HTML DOM substring based on the guidelines and example format provided above.
@@ -125,7 +127,8 @@ Please parse the HTML DOM substring based on the guidelines and example format p
 
 export type ArticleData = {
   title: string;
-  date: Date;
+  date_published: Date;
+  date_updated?: Date;
   authors: string[];
   text: string;
   url: string;

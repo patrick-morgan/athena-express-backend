@@ -61,6 +61,7 @@ export class SmartParser extends BaseParser {
     const authorSet = new Set<string>();
     let articleContent = "";
     let datePublished = "";
+    let dateUpdated = "";
 
     responses.forEach((response, idx) => {
       const data: HTMLParseResponse = response.choices[0].message.parsed;
@@ -78,6 +79,10 @@ export class SmartParser extends BaseParser {
         console.info("Setting date published:", data.date_published);
         datePublished = data.date_published;
       }
+      if (!dateUpdated) {
+        console.info("Setting date updated:", data.date_updated);
+        dateUpdated = data.date_updated;
+      }
       console.info("Adding content:", data.content);
       articleContent += data.content;
     });
@@ -86,6 +91,7 @@ export class SmartParser extends BaseParser {
       title,
       authors: Array.from(authorSet),
       date_published: datePublished,
+      date_updated: dateUpdated,
       content: articleContent,
     };
   }
@@ -102,20 +108,45 @@ export class SmartParser extends BaseParser {
       return {
         title: "",
         authors: [],
-        date: new Date(),
+        date_published: new Date(),
+        date_updated: null,
         hostname: getHostname(this.url),
         url: this.url,
         text: "",
       };
     }
 
-    const { title, authors, date_published, content } = smartParseResponse;
+    const { title, authors, date_published, date_updated, content } =
+      smartParseResponse;
     // Convert date string to Date object
     // const datePublishedObject = parseDateString(date_published);
-    const datePublishedObject = new Date(date_published);
-    if (!datePublishedObject) {
-      console.error("Error parsing date string:", date_published);
+    let datePublishedObject = new Date();
+    if (date_published) {
+      datePublishedObject = new Date(date_published);
+      console.info("Date published:", date_published);
+    } else if (date_updated) {
+      datePublishedObject = new Date(date_updated);
+      console.info("Seting date published to date updated", date_updated);
+    } else {
+      console.info("No date published");
     }
+
+    let dateUpdatedObject = new Date();
+    if (date_updated) {
+      dateUpdatedObject = new Date(date_updated);
+      console.info("Date updated:", date_updated);
+    } else {
+      console.info("No date updated");
+    }
+    // const datePublishedObject = new Date(date_published);
+    // if (!datePublishedObject) {
+    //   console.error("Error parsing date string:", date_published);
+    // }
+
+    // const dateUpdatedObject = new Date(date_published);
+    // if (!datePublishedObject) {
+    //   console.error("Error parsing date string:", date_published);
+    // }
 
     console.info("Smart Parse Response:", smartParseResponse);
 
@@ -126,7 +157,8 @@ export class SmartParser extends BaseParser {
     return {
       title,
       authors,
-      date: datePublishedObject || new Date(),
+      date_published: datePublishedObject,
+      date_updated: dateUpdatedObject,
       hostname,
       url: this.url,
       text: cleanedContent,

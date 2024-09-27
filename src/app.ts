@@ -463,11 +463,12 @@ app.post(
       },
     });
 
-    let title, subtitle, date, text, authors, hostname;
+    let title, subtitle, date_published, date_updated, text, authors, hostname;
     if (existingArticle) {
       title = existingArticle.title;
       subtitle = existingArticle.subtitle;
-      date = existingArticle.date;
+      date_published = existingArticle.date_published;
+      date_updated = existingArticle.date_updated;
       text = existingArticle.text;
       hostname = getHostname(url);
       const author_ids = existingArticle.article_authors.map(
@@ -482,7 +483,8 @@ app.post(
       const articleData: ArticleData = await parser.parse();
       title = articleData.title;
       subtitle = articleData.subtitle;
-      date = articleData.date;
+      date_published = articleData.date_published;
+      date_updated = articleData.date_updated;
       text = articleData.text;
       authors = articleData.authors;
       hostname = articleData.hostname;
@@ -559,7 +561,8 @@ app.post(
           data: {
             title,
             subtitle,
-            date: new Date(date),
+            date_published,
+            date_updated,
             url,
             text,
             publication: publication.id,
@@ -726,7 +729,15 @@ app.post(
       console.error("Error analyzing journalists -- Article not found");
       return res.status(500).json({ error: "Article not found" });
     }
-    const { title, subtitle, date, url, text, article_authors } = article;
+    const {
+      title,
+      subtitle,
+      date_published,
+      date_updated,
+      url,
+      text,
+      article_authors,
+    } = article;
     const hostname = getHostname(url);
     const authors = article_authors.map((author) => author.journalist_id);
 
@@ -998,85 +1009,6 @@ app.get("/articles", async (req, res) => {
   } catch (error) {
     console.error("Error fetching articles:", error);
     res.status(500).json({ error: "Error fetching articles" });
-  }
-});
-
-// Get a single article by ID
-app.get("/articles/:id", async (req, res) => {
-  const { id } = req.params;
-
-  try {
-    const article = await prismaLocalClient.article.findUnique({
-      where: { id },
-      include: {
-        article_authors: true,
-        // article_publicationTopublication: true,
-        summary: true,
-        polarization_bias: true,
-        objectivity_bias: true,
-      },
-    });
-    res.json(article);
-  } catch (error) {
-    console.error("Error fetching article:", error);
-    res.status(500).json({ error: "Error fetching article" });
-  }
-});
-
-// Update an article by ID
-app.put("/articles/:id", async (req, res) => {
-  const { id } = req.params;
-  const {
-    title,
-    subtitle,
-    date,
-    text,
-    authors,
-    publicationId,
-    summaryId,
-    polarizationBiasId,
-    objectivityBiasId,
-  } = req.body;
-
-  try {
-    const article = await prismaLocalClient.article.update({
-      where: { id },
-      data: {
-        title,
-        subtitle,
-        date: new Date(date),
-        text,
-        publication: publicationId,
-        summary: { connect: { id: summaryId } },
-        polarization_bias: { connect: { id: polarizationBiasId } },
-        objectivity_bias: { connect: { id: objectivityBiasId } },
-        article_authors: {
-          deleteMany: {},
-          create: authors.map((authorId: string) => ({
-            journalist_id: authorId,
-          })),
-        },
-      },
-    });
-    res.json(article);
-  } catch (error) {
-    console.error("Error updating article:", error);
-    res.status(500).json({ error: "Error updating article" });
-  }
-});
-
-// Delete an article by ID
-app.delete("/articles/:id", async (req, res) => {
-  const { id } = req.params;
-
-  try {
-    await prismaLocalClient.article.delete({
-      where: { id },
-    });
-    res.json({ message: "Article deleted" });
-  } catch (error) {
-    console.error("Error deleting article:", error);
-    res.status(500).json({ error: "Error deleting article" });
   }
 });
 

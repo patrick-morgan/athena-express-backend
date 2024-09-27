@@ -97,7 +97,7 @@ export class BaseParser {
     // Get properties before we clean
     const title = this.getTitle();
     const authors = this.getAuthors();
-    const date = this.getDate();
+    const date_published = this.getDate();
     const hostname = getHostname(this.url);
     const content = this.getContent();
     const cleanedContent = this.postProcessContent(content);
@@ -105,7 +105,8 @@ export class BaseParser {
     return {
       title,
       authors,
-      date,
+      date_published,
+      date_updated: null,
       hostname,
       url: this.url,
       text: cleanedContent,
