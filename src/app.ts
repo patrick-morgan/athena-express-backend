@@ -632,11 +632,16 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
       });
     } else {
       // Create new article
+      const datePublished = parsedData.date_published
+        ? new Date(parsedData.date_published)
+        : parsedData.date_updated
+        ? new Date(parsedData.date_updated)
+        : new Date();
       article = await prismaLocalClient.article.create({
         data: {
           url,
           title: parsedData.title,
-          date_published: new Date(parsedData.date_published),
+          date_published: datePublished,
           date_updated: parsedData.date_updated
             ? new Date(parsedData.date_updated)
             : null,
