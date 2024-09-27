@@ -14,10 +14,9 @@ model article {
   updated_at        DateTime            @default(now()) @db.Timestamp(6)
   url               String              @db.VarChar(255)
   title             String              @db.VarChar(255)
-  subtitle          String?             @db.VarChar(255)
   date_published    DateTime            @default(now()) @db.Timestamp(6)
   date_updated      DateTime?           @db.Timestamp(6)
-  text              String
+  text              String?
   publication       String              @db.Uuid
   publicationObject publication         @relation("article_publicationTopublication", fields: [publication], references: [id])
   article_authors   article_authors[]

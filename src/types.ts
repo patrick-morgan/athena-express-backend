@@ -3,7 +3,7 @@ export type ArticleData = {
   date_published: Date;
   date_updated: Date | null;
   authors: string[];
-  text: string;
+  text?: string;
   url: string;
   hostname: string;
   subtitle?: string;

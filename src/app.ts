@@ -25,7 +25,9 @@ import {
   ObjectivityBiasResponse,
   buildSummaryPrompt,
   buildPoliticalBiasPrompt,
+  buildHtmlParsingPrompt,
   buildObjectivityPrompt,
+  HTMLParseResponseSchema,
 } from "./prompts/prompts";
 import { fetchPublicationMetadata } from "./publication";
 import { ArticleData } from "./types";
@@ -449,151 +451,322 @@ type CreateArticlePayload = {
   html: string;
 };
 
-// Create or get article
-app.post(
-  "/articles",
-  async (req: Request<{}, {}, CreateArticlePayload>, res: Response) => {
-    const { url, html } = req.body;
+// // Create or get article
+// app.post(
+//   "/articles",
+//   async (req: Request<{}, {}, CreateArticlePayload>, res: Response) => {
+//     const { url, html } = req.body;
 
-    // Get article if it exists
-    const existingArticle = await prismaLocalClient.article.findFirst({
+//     // Get article if it exists
+//     const existingArticle = await prismaLocalClient.article.findFirst({
+//       where: { url },
+//       include: {
+//         article_authors: true,
+//       },
+//     });
+
+//     let title, subtitle, date_published, date_updated, text, authors, hostname;
+//     if (existingArticle) {
+//       title = existingArticle.title;
+//       subtitle = existingArticle.subtitle;
+//       date_published = existingArticle.date_published;
+//       date_updated = existingArticle.date_updated;
+//       text = existingArticle.text;
+//       hostname = getHostname(url);
+//       const author_ids = existingArticle.article_authors.map(
+//         (author) => author.journalist_id
+//       );
+//       const authorObjects = await prismaLocalClient.journalist.findMany({
+//         where: { id: { in: author_ids } },
+//       });
+//       authors = authorObjects.map((author) => author.name);
+//     } else {
+//       const parser = getParser(url, html);
+//       const articleData: ArticleData = await parser.parse();
+//       title = articleData.title;
+//       subtitle = articleData.subtitle;
+//       date_published = articleData.date_published;
+//       date_updated = articleData.date_updated;
+//       text = articleData.text;
+//       authors = articleData.authors;
+//       hostname = articleData.hostname;
+//     }
+
+//     const journalists = [];
+//     let outArticle = null;
+
+//     if (!text) {
+//       console.error("Error parsing article");
+//       return res.status(500).json({ error: "Error parsing article" });
+//     }
+
+//     try {
+//       // Get publication by hostname
+//       let publication = await prismaLocalClient.publication.findFirst({
+//         where: { hostname },
+//       });
+//       console.info("Existing publication:", publication);
+
+//       // If not found, create a new publication
+//       if (!publication) {
+//         const metadata = await fetchPublicationMetadata(hostname);
+//         console.info("Publication metadata:", metadata);
+
+//         if (metadata.date_founded) {
+//           try {
+//             const [month, day, year] = metadata.date_founded.split("/");
+//             metadata.date_founded = `${year}-${month}-${day}`;
+//           } catch (e) {
+//             console.error("Error parsing publication metadata date:", e);
+//             metadata.date_founded = null;
+//           }
+//         }
+
+//         publication = await prismaLocalClient.publication.create({
+//           data: {
+//             hostname,
+//             name: metadata.name,
+//             date_founded: metadata.date_founded
+//               ? new Date(metadata.date_founded)
+//               : null,
+//             // owner: metadata.owner,
+//           },
+//         });
+//         console.info("Created publication:", publication);
+//       }
+
+//       // Get journalists by name/publication
+//       for (let i = 0; i < authors.length; i++) {
+//         let journalist = await prismaLocalClient.journalist.findFirst({
+//           where: { name: authors[i], publication: publication.id },
+//         });
+//         console.info("Existing journalist:", journalist);
+//         // If not found, create a new journalist
+//         if (!journalist) {
+//           journalist = await prismaLocalClient.journalist.create({
+//             data: {
+//               name: authors[i],
+//               publication: publication.id,
+//             },
+//           });
+//           console.info("Created journalist:", journalist);
+//         }
+//         journalists.push(journalist);
+//       }
+
+//       if (existingArticle) {
+//         console.info("Existing article:", existingArticle);
+//         outArticle = existingArticle;
+//       } else {
+//         // Create article
+//         const newArticle = await prismaLocalClient.article.create({
+//           data: {
+//             title,
+//             subtitle,
+//             date_published,
+//             date_updated,
+//             url,
+//             text,
+//             publication: publication.id,
+//             // summary: { connect: { id: summaryId } },
+//             // polarization_bias: { connect: { id: polarizationBiasId } },
+//             // objectivity_bias: { connect: { id: objectivityBiasId } },
+//             article_authors: {
+//               create: journalists.map((journalist) => ({
+//                 journalist_id: journalist.id,
+//               })),
+//             },
+//           },
+//           // include: {
+//           //   article_authors: true,
+//           // },
+//         });
+//         outArticle = newArticle;
+//         console.info("Created article:", newArticle);
+//       }
+
+//       res.json({
+//         article: outArticle,
+//         publication,
+//         journalists,
+//       });
+//     } catch (error) {
+//       console.error("Error creating article:", error);
+//       res.status(500).json({ error: "Error creating article" });
+//     }
+//   }
+// );
+
+// Quick parse route
+app.post("/articles/quick-parse", async (req: Request, res: Response) => {
+  const { url, htmlSubset } = req.body;
+
+  try {
+    // Check if the article already exists
+    let article = await prismaLocalClient.article.findFirst({
       where: { url },
-      include: {
-        article_authors: true,
-      },
+      include: { article_authors: true },
     });
 
-    let title, subtitle, date_published, date_updated, text, authors, hostname;
-    if (existingArticle) {
-      title = existingArticle.title;
-      subtitle = existingArticle.subtitle;
-      date_published = existingArticle.date_published;
-      date_updated = existingArticle.date_updated;
-      text = existingArticle.text;
-      hostname = getHostname(url);
-      const author_ids = existingArticle.article_authors.map(
-        (author) => author.journalist_id
-      );
-      const authorObjects = await prismaLocalClient.journalist.findMany({
-        where: { id: { in: author_ids } },
+    // Parse the HTML subset
+    const requestPayload = {
+      prompt: buildHtmlParsingPrompt(htmlSubset),
+      zodSchema: HTMLParseResponseSchema,
+      propertyName: "article_data",
+    };
+
+    const response = await gptApiCall(requestPayload);
+    const parsedData: ArticleData = response.choices[0].message.parsed;
+
+    if (article) {
+      // Update existing article
+      article = await prismaLocalClient.article.update({
+        where: { id: article.id },
+        include: { article_authors: true },
+        data: {
+          title: parsedData.title,
+          date_updated: parsedData.date_updated
+            ? new Date(parsedData.date_updated)
+            : null,
+        },
       });
-      authors = authorObjects.map((author) => author.name);
     } else {
-      const parser = getParser(url, html);
-      const articleData: ArticleData = await parser.parse();
-      title = articleData.title;
-      subtitle = articleData.subtitle;
-      date_published = articleData.date_published;
-      date_updated = articleData.date_updated;
-      text = articleData.text;
-      authors = articleData.authors;
-      hostname = articleData.hostname;
-    }
-
-    const journalists = [];
-    let outArticle = null;
-
-    if (!text) {
-      console.error("Error parsing article");
-      return res.status(500).json({ error: "Error parsing article" });
-    }
-
-    try {
-      // Get publication by hostname
-      let publication = await prismaLocalClient.publication.findFirst({
-        where: { hostname },
+      // Create new article
+      article = await prismaLocalClient.article.create({
+        data: {
+          url,
+          title: parsedData.title,
+          date_published: new Date(parsedData.date_published),
+          date_updated: parsedData.date_updated
+            ? new Date(parsedData.date_updated)
+            : null,
+          text: "",
+          publication: await getOrCreatePublication(parsedData.hostname),
+        },
+        include: { article_authors: true },
       });
-      console.info("Existing publication:", publication);
-
-      // If not found, create a new publication
-      if (!publication) {
-        const metadata = await fetchPublicationMetadata(hostname);
-        console.info("Publication metadata:", metadata);
-
-        if (metadata.date_founded) {
-          try {
-            const [month, day, year] = metadata.date_founded.split("/");
-            metadata.date_founded = `${year}-${month}-${day}`;
-          } catch (e) {
-            console.error("Error parsing publication metadata date:", e);
-            metadata.date_founded = null;
-          }
-        }
-
-        publication = await prismaLocalClient.publication.create({
-          data: {
-            hostname,
-            name: metadata.name,
-            date_founded: metadata.date_founded
-              ? new Date(metadata.date_founded)
-              : null,
-            // owner: metadata.owner,
-          },
-        });
-        console.info("Created publication:", publication);
-      }
-
-      // Get journalists by name/publication
-      for (let i = 0; i < authors.length; i++) {
-        let journalist = await prismaLocalClient.journalist.findFirst({
-          where: { name: authors[i], publication: publication.id },
-        });
-        console.info("Existing journalist:", journalist);
-        // If not found, create a new journalist
-        if (!journalist) {
-          journalist = await prismaLocalClient.journalist.create({
-            data: {
-              name: authors[i],
-              publication: publication.id,
-            },
-          });
-          console.info("Created journalist:", journalist);
-        }
-        journalists.push(journalist);
-      }
-
-      if (existingArticle) {
-        console.info("Existing article:", existingArticle);
-        outArticle = existingArticle;
-      } else {
-        // Create article
-        const newArticle = await prismaLocalClient.article.create({
-          data: {
-            title,
-            subtitle,
-            date_published,
-            date_updated,
-            url,
-            text,
-            publication: publication.id,
-            // summary: { connect: { id: summaryId } },
-            // polarization_bias: { connect: { id: polarizationBiasId } },
-            // objectivity_bias: { connect: { id: objectivityBiasId } },
-            article_authors: {
-              create: journalists.map((journalist) => ({
-                journalist_id: journalist.id,
-              })),
-            },
-          },
-          // include: {
-          //   article_authors: true,
-          // },
-        });
-        outArticle = newArticle;
-        console.info("Created article:", newArticle);
-      }
-
-      res.json({
-        article: outArticle,
-        publication,
-        journalists,
-      });
-    } catch (error) {
-      console.error("Error creating article:", error);
-      res.status(500).json({ error: "Error creating article" });
     }
+
+    res.json(article);
+  } catch (error) {
+    console.error("Error in quick parse:", error);
+    res.status(500).json({ error: "Error in quick parse" });
   }
-);
+});
+
+// Full parse route
+app.post("/articles/full-parse", async (req: Request, res: Response) => {
+  const { url, html } = req.body;
+
+  try {
+    const parser = getParser(url, html);
+    const articleData: ArticleData = await parser.parse();
+
+    let article = await prismaLocalClient.article.findFirst({
+      where: { url },
+      include: { article_authors: true },
+    });
+
+    if (article) {
+      // Update existing article
+      article = await prismaLocalClient.article.update({
+        where: { id: article.id },
+        include: { article_authors: true },
+        data: {
+          title: articleData.title,
+          date_updated: articleData.date_updated,
+          text: articleData.text,
+        },
+      });
+    } else {
+      // Create new article
+      article = await prismaLocalClient.article.create({
+        data: {
+          url,
+          title: articleData.title,
+          date_published: articleData.date_published,
+          date_updated: articleData.date_updated,
+          text: articleData.text,
+          publication: await getOrCreatePublication(articleData.hostname),
+        },
+        include: { article_authors: true },
+      });
+    }
+
+    // Update or create authors
+    await updateAuthors(article.id, articleData.authors, article.publication);
+
+    res.json(article);
+  } catch (error) {
+    console.error("Error in full parse:", error);
+    res.status(500).json({ error: "Error in full parse" });
+  }
+});
+
+// Publication metadata route
+app.post("/publication-metadata", async (req: Request, res: Response) => {
+  const { hostname } = req.body;
+
+  try {
+    const metadata = await fetchPublicationMetadata(hostname);
+    res.json(metadata);
+  } catch (error) {
+    console.error("Error fetching publication metadata:", error);
+    res.status(500).json({ error: "Error fetching publication metadata" });
+  }
+});
+
+async function getOrCreatePublication(hostname: string) {
+  let publication = await prismaLocalClient.publication.findFirst({
+    where: { hostname },
+  });
+
+  if (!publication) {
+    const metadata = await fetchPublicationMetadata(hostname);
+    publication = await prismaLocalClient.publication.create({
+      data: {
+        hostname,
+        name: metadata.name,
+        date_founded: metadata.date_founded
+          ? new Date(metadata.date_founded)
+          : null,
+      },
+    });
+  }
+
+  return publication.id;
+}
+
+async function updateAuthors(
+  articleId: string,
+  authorNames: string[],
+  publicationId: string
+) {
+  // Remove existing authors
+  await prismaLocalClient.article_authors.deleteMany({
+    where: { article_id: articleId },
+  });
+
+  // Add new authors
+  for (const name of authorNames) {
+    let journalist = await prismaLocalClient.journalist.findFirst({
+      where: { name },
+    });
+
+    if (!journalist) {
+      journalist = await prismaLocalClient.journalist.create({
+        data: { name, publication: publicationId },
+      });
+    }
+
+    await prismaLocalClient.article_authors.create({
+      data: {
+        article_id: articleId,
+        journalist_id: journalist.id,
+      },
+    });
+  }
+}
 
 type PublicationBiasPayload = {
   publicationId: string;
@@ -729,15 +902,8 @@ app.post(
       console.error("Error analyzing journalists -- Article not found");
       return res.status(500).json({ error: "Article not found" });
     }
-    const {
-      title,
-      subtitle,
-      date_published,
-      date_updated,
-      url,
-      text,
-      article_authors,
-    } = article;
+    const { title, date_published, date_updated, url, text, article_authors } =
+      article;
     const hostname = getHostname(url);
     const authors = article_authors.map((author) => author.journalist_id);
 
