@@ -617,9 +617,11 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
 
     const response = await gptApiCall(requestPayload);
     const parsedData: ArticleData = response.choices[0].message.parsed;
+    console.info("parsedData", parsedData);
 
     if (article) {
       // Update existing article
+      console.info("Updating existing article", article.id);
       article = await prismaLocalClient.article.update({
         where: { id: article.id },
         include: { article_authors: true },
@@ -632,6 +634,7 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
       });
     } else {
       // Create new article
+      console.info("Creating new article");
       const datePublished = parsedData.date_published
         ? new Date(parsedData.date_published)
         : parsedData.date_updated
