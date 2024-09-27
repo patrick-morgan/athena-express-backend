@@ -111,7 +111,8 @@ export class SmartParser extends BaseParser {
 
     const { title, authors, date_published, content } = smartParseResponse;
     // Convert date string to Date object
-    const datePublishedObject = parseDateString(date_published);
+    // const datePublishedObject = parseDateString(date_published);
+    const datePublishedObject = new Date(date_published);
     if (!datePublishedObject) {
       console.error("Error parsing date string:", date_published);
     }
