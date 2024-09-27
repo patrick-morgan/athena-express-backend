@@ -704,7 +704,7 @@ app.post("/articles/full-parse", async (req: Request, res: Response) => {
     // Update or create authors
     await updateAuthors(article.id, articleData.authors, article.publication);
 
-    res.json(article);
+    res.json({ article: article });
   } catch (error) {
     console.error("Error in full parse:", error);
     res.status(500).json({ error: "Error in full parse" });
@@ -716,8 +716,8 @@ app.post("/publication-metadata", async (req: Request, res: Response) => {
   const { hostname } = req.body;
 
   try {
-    const metadata = await fetchPublicationMetadata(hostname);
-    res.json(metadata);
+    const publication = await fetchPublicationMetadata(hostname);
+    res.json(publication);
   } catch (error) {
     console.error("Error fetching publication metadata:", error);
     res.status(500).json({ error: "Error fetching publication metadata" });
