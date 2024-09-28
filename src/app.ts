@@ -689,12 +689,15 @@ app.post("/articles/full-parse", async (req: Request, res: Response) => {
     const parser = getParser(url, html);
     const articleData: ArticleData = await parser.parse();
 
+    console.info("articleData", articleData);
+
     let article = await prismaLocalClient.article.findFirst({
       where: { url },
       include: { article_authors: true },
     });
 
     if (article) {
+      console.info("Updating existing article", article.id);
       // Update existing article
       article = await prismaLocalClient.article.update({
         where: { id: article.id },
@@ -706,6 +709,7 @@ app.post("/articles/full-parse", async (req: Request, res: Response) => {
         },
       });
     } else {
+      console.info("Creating new article");
       // Create new article
       article = await prismaLocalClient.article.create({
         data: {
@@ -720,6 +724,8 @@ app.post("/articles/full-parse", async (req: Request, res: Response) => {
       });
     }
 
+    console.info("Updating authors", article.id, articleData.authors);
+
     /// Update authors and get the updated article
     const updatedArticle = await updateAuthors(
       article.id,
@@ -727,9 +733,13 @@ app.post("/articles/full-parse", async (req: Request, res: Response) => {
       article.publication
     );
 
+    console.info("Updated authors", updatedArticle.article_authors);
+
     const publication = await prismaLocalClient.publication.findUnique({
       where: { id: updatedArticle.publication },
     });
+
+    console.info("publication", publication);
 
     const journalists = await prismaLocalClient.journalist.findMany({
       where: {
@@ -738,6 +748,8 @@ app.post("/articles/full-parse", async (req: Request, res: Response) => {
         },
       },
     });
+
+    console.info("journalists", journalists.length);
 
     const response = {
       article: updatedArticle,
