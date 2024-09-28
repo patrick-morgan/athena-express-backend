@@ -758,7 +758,7 @@ app.post("/articles/full-parse", async (req: Request, res: Response) => {
     };
 
     console.info("article_full_parsed", { article: response });
-    return response;
+    res.json(response);
   } catch (error) {
     console.error("Error in full parse:", error);
     res.status(500).json({ error: "Error in full parse" });
@@ -1136,7 +1136,7 @@ app.post(
         },
       });
       console.info("Created article summary:", newArticleSummary);
-      return res.json(newArticleSummary);
+      res.json(newArticleSummary);
     } catch (error) {
       console.error("Error generating summary:", error);
       return res.status(500).json({ error: "Error generating summary" });
@@ -1179,7 +1179,7 @@ app.post(
         },
       });
       console.info("Created article political bias:", newArticleBias);
-      return res.json(newArticleBias);
+      res.json(newArticleBias);
     } catch (error) {
       console.error("Error analyzing political bias:", error);
       return res.status(500).json({ error: "Error analyzing political bias" });
@@ -1221,7 +1221,7 @@ app.post(
         },
       });
       console.info("Created article objectivity:", newArticleBias);
-      return res.json(newArticleBias);
+      res.json(newArticleBias);
     } catch (error) {
       console.error("Error analyzing objectivity:", error);
       return res.status(500).json({ error: "Error analyzing objectivity" });
