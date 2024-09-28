@@ -615,8 +615,8 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
       propertyName: "article_data",
     };
 
-    const response = await gptApiCall(requestPayload);
-    const parsedData: ArticleData = response.choices[0].message.parsed;
+    const gptResponse = await gptApiCall(requestPayload);
+    const parsedData: ArticleData = gptResponse.choices[0].message.parsed;
     console.info("parsedData", parsedData);
 
     if (article) {
@@ -655,7 +655,26 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
       });
     }
 
-    res.json(article);
+    const publication = await prismaLocalClient.publication.findUnique({
+      where: { id: article.publication },
+    });
+
+    const journalists = await prismaLocalClient.journalist.findMany({
+      where: {
+        id: {
+          in: article.article_authors.map((aa) => aa.journalist_id),
+        },
+      },
+    });
+
+    const response = {
+      article,
+      publication: publication,
+      journalists: journalists,
+    };
+
+    console.info("article_quick_parsed", { article: response });
+    res.json(response);
   } catch (error) {
     console.error("Error in quick parse:", error);
     res.status(500).json({ error: "Error in quick parse" });
@@ -708,9 +727,26 @@ app.post("/articles/full-parse", async (req: Request, res: Response) => {
       article.publication
     );
 
-    console.info("article_full_parsed", { article: updatedArticle });
+    const publication = await prismaLocalClient.publication.findUnique({
+      where: { id: updatedArticle.publication },
+    });
 
-    res.json({ article: article });
+    const journalists = await prismaLocalClient.journalist.findMany({
+      where: {
+        id: {
+          in: updatedArticle.article_authors.map((aa) => aa.journalist_id),
+        },
+      },
+    });
+
+    const response = {
+      article: updatedArticle,
+      publication: publication!,
+      journalists: journalists,
+    };
+
+    console.info("article_full_parsed", { article: response });
+    return response;
   } catch (error) {
     console.error("Error in full parse:", error);
     res.status(500).json({ error: "Error in full parse" });
