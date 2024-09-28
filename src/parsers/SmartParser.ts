@@ -131,7 +131,7 @@ export class SmartParser extends BaseParser {
       console.info("No date published");
     }
 
-    let dateUpdatedObject = new Date();
+    let dateUpdatedObject = null;
     if (date_updated) {
       dateUpdatedObject = new Date(date_updated);
       console.info("Date updated:", date_updated);
