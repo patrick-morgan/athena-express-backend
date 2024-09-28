@@ -701,8 +701,14 @@ app.post("/articles/full-parse", async (req: Request, res: Response) => {
       });
     }
 
-    // Update or create authors
-    await updateAuthors(article.id, articleData.authors, article.publication);
+    /// Update authors and get the updated article
+    const updatedArticle = await updateAuthors(
+      article.id,
+      articleData.authors,
+      article.publication
+    );
+
+    console.info("article_full_parsed", { article: updatedArticle });
 
     res.json({ article: article });
   } catch (error) {
@@ -774,6 +780,14 @@ async function updateAuthors(
       },
     });
   }
+
+  // Fetch and return the updated article with authors
+  const updatedArticle = await prismaLocalClient.article.findUnique({
+    where: { id: articleId },
+    include: { article_authors: true },
+  });
+
+  return updatedArticle!;
 }
 
 type PublicationBiasPayload = {
