@@ -599,7 +599,7 @@ type CreateArticlePayload = {
 
 // Quick parse route
 app.post("/articles/quick-parse", async (req: Request, res: Response) => {
-  const { url, htmlSubset } = req.body;
+  const { url, hostname, htmlSubset } = req.body;
 
   try {
     // Check if the article already exists
@@ -649,7 +649,7 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
             ? new Date(parsedData.date_updated)
             : null,
           text: "",
-          publication: await getOrCreatePublication(parsedData.hostname),
+          publication: await getOrCreatePublication(hostname),
         },
         include: { article_authors: true, publicationObject: true },
       });
