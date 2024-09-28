@@ -1107,6 +1107,7 @@ app.post(
     const { text, id: articleId } = req.body;
     console.log("generating summary fish", articleId);
     console.log("Text", text);
+    console.log("summary prompt", buildSummaryPrompt(text));
     const requestPayload = {
       prompt: buildSummaryPrompt(text),
       zodSchema: SummaryResponseSchema,
