@@ -624,7 +624,7 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
       console.info("Updating existing article", article.id);
       article = await prismaLocalClient.article.update({
         where: { id: article.id },
-        include: { article_authors: true },
+        include: { article_authors: true, publicationObject: true },
         data: {
           title: parsedData.title,
           date_updated: parsedData.date_updated
@@ -651,7 +651,7 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
           text: "",
           publication: await getOrCreatePublication(parsedData.hostname),
         },
-        include: { article_authors: true },
+        include: { article_authors: true, publicationObject: true },
       });
     }
 
