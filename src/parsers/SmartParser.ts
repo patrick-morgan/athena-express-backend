@@ -10,7 +10,6 @@ import {
 } from "../prompts/prompts";
 import { gptApiCall } from "../prompts/chatgpt";
 import { BaseParser } from "./BaseParser";
-import { AxiosResponse } from "axios";
 import { ParsedChatCompletion } from "openai/resources/beta/chat/completions";
 
 /** Smart parser using LLMs to parser article */
