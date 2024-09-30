@@ -704,6 +704,7 @@ app.post("/articles/full-parse", async (req: Request, res: Response) => {
         include: { article_authors: true },
         data: {
           title: articleData.title,
+          date_published: articleData.date_published,
           date_updated: articleData.date_updated,
           text: articleData.text,
         },
