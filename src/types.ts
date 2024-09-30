@@ -6,5 +6,4 @@ export type ArticleData = {
   text?: string;
   url: string;
   hostname: string;
-  subtitle?: string;
 };
