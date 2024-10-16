@@ -533,21 +533,29 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
 // Full parse route
 app.post("/articles/full-parse", async (req: Request, res: Response) => {
   const { url, html } = req.body;
+  console.time("full-parse");
 
   try {
+    console.time("parser-initialization");
     const parser = getParser(url, html);
+    console.timeEnd("parser-initialization");
+
+    console.time("article-parsing");
     const articleData: ArticleData = await parser.parse();
+    console.timeEnd("article-parsing");
 
     console.info("articleData", articleData);
 
+    console.time("find-existing-article");
     let article = await prismaLocalClient.article.findFirst({
       where: { url },
       include: { article_authors: true },
     });
+    console.timeEnd("find-existing-article");
 
+    console.time("article-upsert");
     if (article) {
       console.info("Updating existing article", article.id);
-      // Update existing article
       article = await prismaLocalClient.article.update({
         where: { id: article.id },
         include: { article_authors: true },
@@ -560,7 +568,6 @@ app.post("/articles/full-parse", async (req: Request, res: Response) => {
       });
     } else {
       console.info("Creating new article");
-      // Create new article
       article = await prismaLocalClient.article.create({
         data: {
           url,
@@ -573,24 +580,29 @@ app.post("/articles/full-parse", async (req: Request, res: Response) => {
         include: { article_authors: true },
       });
     }
+    console.timeEnd("article-upsert");
 
     console.info("Updating authors", article.id, articleData.authors);
 
-    /// Update authors and get the updated article
+    console.time("update-authors");
     const updatedArticle = await updateAuthors(
       article.id,
       articleData.authors,
       article.publication
     );
+    console.timeEnd("update-authors");
 
     console.info("Updated authors", updatedArticle.article_authors);
 
+    console.time("fetch-publication");
     const publication = await prismaLocalClient.publication.findUnique({
       where: { id: updatedArticle.publication },
     });
+    console.timeEnd("fetch-publication");
 
     console.info("publication", publication);
 
+    console.time("fetch-journalists");
     const journalists = await prismaLocalClient.journalist.findMany({
       where: {
         id: {
@@ -598,6 +610,7 @@ app.post("/articles/full-parse", async (req: Request, res: Response) => {
         },
       },
     });
+    console.timeEnd("fetch-journalists");
 
     console.info("journalists", journalists.length);
 
@@ -608,9 +621,11 @@ app.post("/articles/full-parse", async (req: Request, res: Response) => {
     };
 
     console.info("article_full_parsed", { article: response });
+    console.timeEnd("full-parse");
     res.json(response);
   } catch (error) {
     console.error("Error in full parse:", error);
+    console.timeEnd("full-parse");
     res.status(500).json({ error: "Error in full parse" });
   }
 });
