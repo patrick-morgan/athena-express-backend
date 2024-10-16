@@ -584,6 +584,9 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
         include: { article_authors: true, publicationObject: true },
         data: {
           title: parsedData.title,
+          date_published: parsedData.date_published
+            ? new Date(parsedData.date_published)
+            : article.date_published,
           date_updated: parsedData.date_updated
             ? new Date(parsedData.date_updated)
             : article.date_updated
