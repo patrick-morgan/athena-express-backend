@@ -463,6 +463,8 @@ app.post("/articles/date-updated", async (req: Request, res: Response) => {
       return res.json({ article: null, needsUpdate: false });
     }
 
+    console.info("Existing article.date_updated", article.date_updated);
+
     // Check for date_updated
     const bodySubset = body.slice(0, 1000);
     const requestPayload = {
@@ -482,6 +484,14 @@ app.post("/articles/date-updated", async (req: Request, res: Response) => {
       console.info("parsedData.date_updated", parsedData.date_updated);
       const newDateUpdated = new Date(parsedData.date_updated);
       if (!article.date_updated || newDateUpdated > article.date_updated) {
+        if (!article.date_updated) {
+          console.info("article.date_updated is null, setting it");
+        }
+        if (article.date_updated && newDateUpdated > article.date_updated) {
+          console.log("greater than condition");
+          console.log("new date updated", newDateUpdated);
+          console.log("article.date_updated", article.date_updated);
+        }
         console.info("updating date_updated", newDateUpdated);
         article = await prismaLocalClient.article.update({
           where: { id: article.id },
