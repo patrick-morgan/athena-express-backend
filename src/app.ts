@@ -451,30 +451,20 @@ app.post(
 );
 
 app.post("/articles/date-updated", async (req: Request, res: Response) => {
-  const {
-    url,
-    head,
-    body,
-  }: {
-    url: string;
-    head: string;
-    body: string;
-  } = req.body;
+  const { url, head, body } = req.body;
 
   try {
-    // Check if the article already exists
     let article = await prismaLocalClient.article.findFirst({
       where: { url },
       include: { article_authors: true, publicationObject: true },
     });
 
     if (!article) {
-      // Article doesn't exist, return null
       return res.json({ article: null, needsUpdate: false });
     }
 
-    // Article exists, check for date_updated
-    const bodySubset = body.slice(0, 1000); // Adjust token limit as needed
+    // Check for date_updated
+    const bodySubset = body.slice(0, 1000);
     const requestPayload = {
       prompt: buildDateUpdatedPrompt(head, bodySubset, article.date_updated),
       zodSchema: DateUpdatedResponseSchema,
@@ -489,7 +479,6 @@ app.post("/articles/date-updated", async (req: Request, res: Response) => {
     if (parsedData.date_updated) {
       const newDateUpdated = new Date(parsedData.date_updated);
       if (!article.date_updated || newDateUpdated > article.date_updated) {
-        // Update the article with the new date_updated
         article = await prismaLocalClient.article.update({
           where: { id: article.id },
           data: { date_updated: newDateUpdated },
@@ -497,17 +486,28 @@ app.post("/articles/date-updated", async (req: Request, res: Response) => {
         });
         needsUpdate = true;
       }
-    } else if (!article.date_updated && parsedData.date_updated) {
-      // date_updated is now present but wasn't before
-      article = await prismaLocalClient.article.update({
-        where: { id: article.id },
-        data: { date_updated: new Date(parsedData.date_updated) },
-        include: { article_authors: true, publicationObject: true },
-      });
-      needsUpdate = true;
     }
 
-    res.json({ article, needsUpdate });
+    // Fetch summary, political bias, and objectivity bias
+    const [summary, politicalBias, objectivityBias] = await Promise.all([
+      prismaLocalClient.summary.findFirst({
+        where: { article_id: article.id },
+      }),
+      prismaLocalClient.polarization_bias.findFirst({
+        where: { article_id: article.id },
+      }),
+      prismaLocalClient.objectivity_bias.findFirst({
+        where: { article_id: article.id },
+      }),
+    ]);
+
+    res.json({
+      article,
+      needsUpdate,
+      summary: summary?.summary || null,
+      political_bias_score: politicalBias?.bias_score || null,
+      objectivity_score: objectivityBias?.rhetoric_score || null,
+    });
   } catch (error) {
     console.error("Error in date-updated check:", error);
     res.status(500).json({ error: "Error in date-updated check" });
