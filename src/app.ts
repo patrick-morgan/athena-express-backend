@@ -554,9 +554,9 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
       });
     }
 
-    // const publication = await prismaLocalClient.publication.findUnique({
-    //   where: { id: article.publication },
-    // });
+    const publication = await prismaLocalClient.publication.findUnique({
+      where: { id: article.publication },
+    });
 
     // const journalists = await prismaLocalClient.journalist.findMany({
     //   where: {
@@ -568,7 +568,7 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
 
     const response = {
       article,
-      // publication: publication,
+      publication: publication,
       // journalists: journalists,
       summary: parsedData.summary,
       political_bias_score: parsedData.political_bias_score,
