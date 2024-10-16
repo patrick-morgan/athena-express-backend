@@ -131,7 +131,7 @@ app.get(
         email: userEmail,
         limit: 1,
       });
-      console.info("Customer:", customer);
+      // console.info("Customer:", customer);
 
       if (customer.data.length === 0) {
         // cache.set(userId, false);
