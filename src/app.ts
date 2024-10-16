@@ -29,6 +29,7 @@ import {
   HTMLParseResponseSchema,
   buildQuickParsingPrompt,
   QuickParseResponse,
+  QuickParseParseResponseSchema,
 } from "./prompts/prompts";
 import { fetchPublicationMetadata } from "./publication";
 import { ArticleData } from "./types";
@@ -473,7 +474,7 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
     // Parse the HTML subset
     const requestPayload = {
       prompt: buildQuickParsingPrompt(head, body),
-      zodSchema: HTMLParseResponseSchema,
+      zodSchema: QuickParseParseResponseSchema,
       propertyName: "article_data",
     };
 
