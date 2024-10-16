@@ -558,18 +558,18 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
       where: { id: article.publication },
     });
 
-    // const journalists = await prismaLocalClient.journalist.findMany({
-    //   where: {
-    //     id: {
-    //       in: article.article_authors.map((aa) => aa.journalist_id),
-    //     },
-    //   },
-    // });
+    const journalists = await prismaLocalClient.journalist.findMany({
+      where: {
+        id: {
+          in: article.article_authors.map((aa) => aa.journalist_id),
+        },
+      },
+    });
 
     const response = {
       article,
       publication: publication,
-      // journalists: journalists,
+      journalists: journalists,
       summary: parsedData.summary,
       political_bias_score: parsedData.political_bias_score,
       objectivity_score: parsedData.objectivity_score,
