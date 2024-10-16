@@ -137,7 +137,7 @@ export const buildDateUpdatedPrompt = (
   currentDateUpdated: Date | null
 ) => `
 You are an AI assistant tasked with identifying the "date updated" or "last modified" date of an article.
-Given the head and a subset of the body of an HTML document, your task is to find and return the date the article was last updated or modified.
+Given the head and a subset of the body of an HTML document, your task is to find and return the date the article was last updated or modified. This is not the date published, if there is only one date listed without either "updated" or "modified" in the text, that is most likely the date published.
 
 Current known date_updated: ${
   currentDateUpdated ? currentDateUpdated.toISOString() : "None"
@@ -150,14 +150,9 @@ Body subset:
 ${bodySubset}
 
 Rules:
-1. If you find a new or different "date updated" or "last modified" date, return it in ISO 8601 format (YYYY-MM-DDTHH:mm:ss.sssZ).
+1. If you find a new or different "date updated" or "last modified" date, return it in ISO 8601 string (e.g., "2024-09-26T14:30:00Z").
 2. If you don't find any "date updated" or "last modified" date, or if it's the same as the current known date, return null.
 3. Only return the date if you're confident it represents when the article was last updated or modified.
-
-Return your response in the following JSON format:
-{
-  "date_updated": "YYYY-MM-DDTHH:mm:ss.sssZ" or null
-}
 `;
 
 export const QuickParseParseResponseSchema = z.object({

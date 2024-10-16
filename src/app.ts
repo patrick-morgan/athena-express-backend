@@ -474,11 +474,15 @@ app.post("/articles/date-updated", async (req: Request, res: Response) => {
     const response = await gptApiCall(requestPayload);
     const parsedData = response.choices[0].message.parsed;
 
+    console.info("date updated parsed data", parsedData);
+
     let needsUpdate = false;
 
     if (parsedData.date_updated) {
+      console.info("parsedData.date_updated", parsedData.date_updated);
       const newDateUpdated = new Date(parsedData.date_updated);
       if (!article.date_updated || newDateUpdated > article.date_updated) {
+        console.info("updating date_updated", newDateUpdated);
         article = await prismaLocalClient.article.update({
           where: { id: article.id },
           data: { date_updated: newDateUpdated },
