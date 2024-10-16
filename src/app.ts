@@ -28,6 +28,8 @@ import {
   buildHtmlParsingPrompt,
   buildObjectivityPrompt,
   HTMLParseResponseSchema,
+  buildQuickParsingPrompt,
+  QuickParseResponse,
 } from "./prompts/prompts";
 import { fetchPublicationMetadata } from "./publication";
 import { ArticleData } from "./types";
@@ -448,7 +450,19 @@ app.post(
 
 // Quick parse route
 app.post("/articles/quick-parse", async (req: Request, res: Response) => {
-  const { url, hostname, htmlSubset } = req.body;
+  const {
+    url,
+    hostname,
+    head,
+    body,
+  }: {
+    url: string;
+    hostname: string;
+    head: string;
+    body: string;
+  } = req.body;
+
+  // const htmlSubset = head + body;
 
   try {
     // Check if the article already exists
@@ -459,13 +473,14 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
 
     // Parse the HTML subset
     const requestPayload = {
-      prompt: buildHtmlParsingPrompt(htmlSubset),
+      prompt: buildQuickParsingPrompt(head, body),
       zodSchema: HTMLParseResponseSchema,
       propertyName: "article_data",
     };
 
     const gptResponse = await gptApiCall(requestPayload);
-    const parsedData: ArticleData = gptResponse.choices[0].message.parsed;
+    const parsedData: QuickParseResponse =
+      gptResponse.choices[0].message.parsed;
     console.info("parsedData", parsedData);
 
     if (article) {
@@ -497,10 +512,45 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
           date_updated: parsedData.date_updated
             ? new Date(parsedData.date_updated)
             : null,
-          text: "",
+          text: head + body,
           publication: await getOrCreatePublication(hostname),
         },
         include: { article_authors: true, publicationObject: true },
+      });
+
+      const updatedArticle = await updateAuthors(
+        article.id,
+        parsedData.authors,
+        article.publication
+      );
+
+      // Create summary
+      await prismaLocalClient.summary.create({
+        data: {
+          article_id: article.id,
+          summary: parsedData.summary,
+          footnotes: {},
+        },
+      });
+
+      // Create political bias
+      await prismaLocalClient.polarization_bias.create({
+        data: {
+          article_id: article.id,
+          bias_score: parsedData.political_bias_score,
+          analysis: "",
+          footnotes: {},
+        },
+      });
+
+      // Create objectivity bias
+      await prismaLocalClient.objectivity_bias.create({
+        data: {
+          article_id: article.id,
+          rhetoric_score: parsedData.objectivity_score,
+          analysis: "",
+          footnotes: {},
+        },
       });
     }
 
@@ -520,9 +570,17 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
       article,
       publication: publication,
       journalists: journalists,
+      summary: parsedData.summary,
+      political_bias_score: parsedData.political_bias_score,
+      objectivity_score: parsedData.objectivity_score,
     };
 
-    console.info("article_quick_parsed", { article: response });
+    console.info("article_quick_parsed", {
+      article: response,
+      summary: parsedData.summary,
+      political_bias_score: parsedData.political_bias_score,
+      objectivity_score: parsedData.objectivity_score,
+    });
     res.json(response);
   } catch (error) {
     console.error("Error in quick parse:", error);

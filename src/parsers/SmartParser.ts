@@ -22,7 +22,7 @@ export class SmartParser extends BaseParser {
     return this.$.html();
   }
 
-  cleanContent(): void {
+  cleanContent(): string {
     const $ = this.$;
     // Remove all attributes from all elements
     $("*").each(function (idx, elem) {
@@ -31,17 +31,25 @@ export class SmartParser extends BaseParser {
         $(elem).removeAttr(attr);
       }
     });
+
+    // Remove all scripts and style tags
+    $("script, style").remove();
+    // Get the text content of the body
+    const text = $("body").text();
+    // Remove extra whitespace and trim
+    return text.replace(/\s+/g, " ").trim();
   }
 
   async smartParse(): Promise<HTMLParseResponse | null> {
     console.time("smartParse");
 
     console.time("cleanContent");
-    this.cleanContent();
+    const cleanedText = this.cleanContent();
+    console.info("Cleaned content:", cleanedText);
     console.timeEnd("cleanContent");
 
     console.time("chunkHTML");
-    const chunks = super.chunkHTML();
+    const chunks = super.chunkHTML(cleanedText);
     console.timeEnd("chunkHTML");
 
     console.info("Chunks:", chunks);

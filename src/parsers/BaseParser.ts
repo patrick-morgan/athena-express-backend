@@ -66,8 +66,9 @@ export class BaseParser {
     // Default implementation, should be overridden
   }
 
-  chunkHTML(): string[] {
-    const chunks = chunkContent(this.getHTML());
+  chunkHTML(text: string): string[] {
+    // const chunks = chunkContent(this.getHTML());
+    const chunks = chunkContent(text);
     return chunks;
   }
 
