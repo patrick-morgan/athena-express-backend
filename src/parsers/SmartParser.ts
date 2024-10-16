@@ -34,35 +34,45 @@ export class SmartParser extends BaseParser {
   }
 
   async smartParse(): Promise<HTMLParseResponse | null> {
-    this.cleanContent();
+    console.time("smartParse");
 
+    console.time("cleanContent");
+    this.cleanContent();
+    console.timeEnd("cleanContent");
+
+    console.time("chunkHTML");
     const chunks = super.chunkHTML();
+    console.timeEnd("chunkHTML");
 
     console.info("Chunks:", chunks);
 
-    const chunkPromises: Promise<ParsedChatCompletion<any>>[] = [];
-    chunks.forEach((chunk) => {
-      const prompt = buildHtmlParsingPrompt(chunk);
-      const requestPayload = {
-        prompt,
-        zodSchema: HTMLParseResponseSchema,
-        propertyName: "html_parse",
-      };
-      console.info("Request payload:", requestPayload);
-      const promise = gptApiCall(requestPayload);
-      chunkPromises.push(promise);
-    });
+    console.time("createPromises");
+    const chunkPromises: Promise<ParsedChatCompletion<any>>[] = chunks.map(
+      (chunk) => {
+        const prompt = buildHtmlParsingPrompt(chunk);
+        const requestPayload = {
+          prompt,
+          zodSchema: HTMLParseResponseSchema,
+          propertyName: "html_parse",
+        };
+        console.info("Request payload:", requestPayload);
+        return gptApiCall(requestPayload);
+      }
+    );
+    console.timeEnd("createPromises");
 
-    // Wait for all promises to resolve
+    console.time("resolvePromises");
     const responses = await Promise.all(chunkPromises);
+    console.timeEnd("resolvePromises");
 
+    console.time("processResponses");
     let title = "";
     const authorSet = new Set<string>();
     let articleContent = "";
     let datePublished = "";
     let dateUpdated = "";
 
-    responses.forEach((response, idx) => {
+    for (const response of responses) {
       const data: HTMLParseResponse = response.choices[0].message.parsed;
       console.info("HTML parse response:", data);
 
@@ -84,7 +94,10 @@ export class SmartParser extends BaseParser {
       }
       console.info("Adding content:", data.content);
       articleContent += data.content;
-    });
+    }
+    console.timeEnd("processResponses");
+
+    console.timeEnd("smartParse");
 
     return {
       title,
