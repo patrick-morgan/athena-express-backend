@@ -502,18 +502,22 @@ app.post("/articles/date-updated", async (req: Request, res: Response) => {
       }
     }
 
-    // Fetch summary, political bias, and objectivity bias
-    const [summary, politicalBias, objectivityBias] = await Promise.all([
-      prismaLocalClient.summary.findFirst({
+    let summary: any | null = null;
+    let politicalBias: any | null = null;
+    let objectivityBias: any | null = null;
+
+    if (!needsUpdate) {
+      // Fetch summary, political bias, and objectivity bias
+      summary = await prismaLocalClient.summary.findFirst({
         where: { article_id: article.id },
-      }),
-      prismaLocalClient.polarization_bias.findFirst({
+      });
+      politicalBias = await prismaLocalClient.polarization_bias.findFirst({
         where: { article_id: article.id },
-      }),
-      prismaLocalClient.objectivity_bias.findFirst({
+      });
+      objectivityBias = await prismaLocalClient.objectivity_bias.findFirst({
         where: { article_id: article.id },
-      }),
-    ]);
+      });
+    }
 
     res.json({
       article,
