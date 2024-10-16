@@ -30,6 +30,8 @@ import {
   buildQuickParsingPrompt,
   QuickParseResponse,
   QuickParseParseResponseSchema,
+  buildDateUpdatedPrompt,
+  DateUpdatedResponseSchema,
 } from "./prompts/prompts";
 import { fetchPublicationMetadata } from "./publication";
 import { ArticleData } from "./types";
@@ -448,6 +450,70 @@ app.post(
   }
 );
 
+app.post("/articles/date-updated", async (req: Request, res: Response) => {
+  const {
+    url,
+    head,
+    body,
+  }: {
+    url: string;
+    head: string;
+    body: string;
+  } = req.body;
+
+  try {
+    // Check if the article already exists
+    let article = await prismaLocalClient.article.findFirst({
+      where: { url },
+      include: { article_authors: true, publicationObject: true },
+    });
+
+    if (!article) {
+      // Article doesn't exist, return null
+      return res.json({ article: null, needsUpdate: false });
+    }
+
+    // Article exists, check for date_updated
+    const bodySubset = body.slice(0, 1000); // Adjust token limit as needed
+    const requestPayload = {
+      prompt: buildDateUpdatedPrompt(head, bodySubset, article.date_updated),
+      zodSchema: DateUpdatedResponseSchema,
+      propertyName: "date_updated",
+    };
+
+    const response = await gptApiCall(requestPayload);
+    const parsedData = response.choices[0].message.parsed;
+
+    let needsUpdate = false;
+
+    if (parsedData.date_updated) {
+      const newDateUpdated = new Date(parsedData.date_updated);
+      if (!article.date_updated || newDateUpdated > article.date_updated) {
+        // Update the article with the new date_updated
+        article = await prismaLocalClient.article.update({
+          where: { id: article.id },
+          data: { date_updated: newDateUpdated },
+          include: { article_authors: true, publicationObject: true },
+        });
+        needsUpdate = true;
+      }
+    } else if (!article.date_updated && parsedData.date_updated) {
+      // date_updated is now present but wasn't before
+      article = await prismaLocalClient.article.update({
+        where: { id: article.id },
+        data: { date_updated: new Date(parsedData.date_updated) },
+        include: { article_authors: true, publicationObject: true },
+      });
+      needsUpdate = true;
+    }
+
+    res.json({ article, needsUpdate });
+  } catch (error) {
+    console.error("Error in date-updated check:", error);
+    res.status(500).json({ error: "Error in date-updated check" });
+  }
+});
+
 // Quick parse route
 app.post("/articles/quick-parse", async (req: Request, res: Response) => {
   const {
@@ -471,7 +537,6 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
       include: { article_authors: true },
     });
 
-    // Parse the HTML subset
     const requestPayload = {
       prompt: buildQuickParsingPrompt(head, body),
       zodSchema: QuickParseParseResponseSchema,

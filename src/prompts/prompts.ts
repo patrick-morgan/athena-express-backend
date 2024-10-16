@@ -125,6 +125,41 @@ Guidelines for Parsing:
 Please parse the HTML DOM substring based on the guidelines and example format provided above.
 `;
 
+export const DateUpdatedResponseSchema = z.object({
+  date_updated: z.string().nullable(),
+});
+
+export type DateUpdatedResponse = z.infer<typeof DateUpdatedResponseSchema>;
+
+export const buildDateUpdatedPrompt = (
+  head: string,
+  bodySubset: string,
+  currentDateUpdated: Date | null
+) => `
+You are an AI assistant tasked with identifying the "date updated" or "last modified" date of an article.
+Given the head and a subset of the body of an HTML document, your task is to find and return the date the article was last updated or modified.
+
+Current known date_updated: ${
+  currentDateUpdated ? currentDateUpdated.toISOString() : "None"
+}
+
+Head:
+${head}
+
+Body subset:
+${bodySubset}
+
+Rules:
+1. If you find a new or different "date updated" or "last modified" date, return it in ISO 8601 format (YYYY-MM-DDTHH:mm:ss.sssZ).
+2. If you don't find any "date updated" or "last modified" date, or if it's the same as the current known date, return null.
+3. Only return the date if you're confident it represents when the article was last updated or modified.
+
+Return your response in the following JSON format:
+{
+  "date_updated": "YYYY-MM-DDTHH:mm:ss.sssZ" or null
+}
+`;
+
 export const QuickParseParseResponseSchema = z.object({
   title: z.string(),
   authors: z.array(z.string()),
