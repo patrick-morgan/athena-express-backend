@@ -505,6 +505,7 @@ app.post("/articles/date-updated", async (req: Request, res: Response) => {
     let summary: any | null = null;
     let politicalBias: any | null = null;
     let objectivityBias: any | null = null;
+    let journalists: any | null = null;
 
     if (!needsUpdate) {
       // Fetch summary, political bias, and objectivity bias
@@ -517,11 +518,19 @@ app.post("/articles/date-updated", async (req: Request, res: Response) => {
       objectivityBias = await prismaLocalClient.objectivity_bias.findFirst({
         where: { article_id: article.id },
       });
+      journalists = await prismaLocalClient.journalist.findMany({
+        where: {
+          id: {
+            in: article.article_authors.map((aa) => aa.journalist_id),
+          },
+        },
+      });
     }
 
     res.json({
       article,
       needsUpdate,
+      journalists,
       summary: summary?.summary || null,
       political_bias_score: politicalBias?.bias_score || null,
       objectivity_score: objectivityBias?.rhetoric_score || null,
