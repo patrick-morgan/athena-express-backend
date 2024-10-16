@@ -482,76 +482,77 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
       gptResponse.choices[0].message.parsed;
     console.info("parsedData", parsedData);
 
-    // if (article) {
-    //   // Update existing article
-    //   console.info("Updating existing article", article.id);
-    //   article = await prismaLocalClient.article.update({
-    //     where: { id: article.id },
-    //     include: { article_authors: true, publicationObject: true },
-    //     data: {
-    //       title: parsedData.title,
-    //       date_updated: parsedData.date_updated
-    //         ? new Date(parsedData.date_updated)
-    //         : null,
-    //     },
-    //   });
-    // } else {
-    //   // Create new article
-    //   console.info("Creating new article");
-    //   const datePublished = parsedData.date_published
-    //     ? new Date(parsedData.date_published)
-    //     : parsedData.date_updated
-    //     ? new Date(parsedData.date_updated)
-    //     : new Date();
-    //   article = await prismaLocalClient.article.create({
-    //     data: {
-    //       url,
-    //       title: parsedData.title,
-    //       date_published: datePublished,
-    //       date_updated: parsedData.date_updated
-    //         ? new Date(parsedData.date_updated)
-    //         : null,
-    //       text: head + body,
-    //       publication: await getOrCreatePublication(hostname),
-    //     },
-    //     include: { article_authors: true, publicationObject: true },
-    //   });
+    if (article) {
+      // Update existing article
+      console.info("Updating existing article", article.id);
+      article = await prismaLocalClient.article.update({
+        where: { id: article.id },
+        include: { article_authors: true, publicationObject: true },
+        data: {
+          title: parsedData.title,
+          date_updated: parsedData.date_updated
+            ? new Date(parsedData.date_updated)
+            : null,
+        },
+      });
+    } else {
+      // Create new article
+      console.info("Creating new article");
+      const datePublished = parsedData.date_published
+        ? new Date(parsedData.date_published)
+        : parsedData.date_updated
+        ? new Date(parsedData.date_updated)
+        : new Date();
 
-    //   const updatedArticle = await updateAuthors(
-    //     article.id,
-    //     parsedData.authors,
-    //     article.publication
-    //   );
+      article = await prismaLocalClient.article.create({
+        data: {
+          url,
+          title: parsedData.title,
+          date_published: datePublished,
+          date_updated: parsedData.date_updated
+            ? new Date(parsedData.date_updated)
+            : null,
+          text: head + body,
+          publication: await getOrCreatePublication(hostname),
+        },
+        include: { article_authors: true, publicationObject: true },
+      });
 
-    //   // Create summary
-    //   await prismaLocalClient.summary.create({
-    //     data: {
-    //       article_id: article.id,
-    //       summary: parsedData.summary,
-    //       footnotes: {},
-    //     },
-    //   });
+      const updatedArticle = await updateAuthors(
+        article.id,
+        parsedData.authors,
+        article.publication
+      );
 
-    //   // Create political bias
-    //   await prismaLocalClient.polarization_bias.create({
-    //     data: {
-    //       article_id: article.id,
-    //       bias_score: parsedData.political_bias_score,
-    //       analysis: "",
-    //       footnotes: {},
-    //     },
-    //   });
+      // Create summary
+      await prismaLocalClient.summary.create({
+        data: {
+          article_id: article.id,
+          summary: parsedData.summary,
+          footnotes: {},
+        },
+      });
 
-    //   // Create objectivity bias
-    //   await prismaLocalClient.objectivity_bias.create({
-    //     data: {
-    //       article_id: article.id,
-    //       rhetoric_score: parsedData.objectivity_score,
-    //       analysis: "",
-    //       footnotes: {},
-    //     },
-    //   });
-    // }
+      // Create political bias
+      await prismaLocalClient.polarization_bias.create({
+        data: {
+          article_id: article.id,
+          bias_score: parsedData.political_bias_score,
+          analysis: "",
+          footnotes: {},
+        },
+      });
+
+      // Create objectivity bias
+      await prismaLocalClient.objectivity_bias.create({
+        data: {
+          article_id: article.id,
+          rhetoric_score: parsedData.objectivity_score,
+          analysis: "",
+          footnotes: {},
+        },
+      });
+    }
 
     // const publication = await prismaLocalClient.publication.findUnique({
     //   where: { id: article.publication },
