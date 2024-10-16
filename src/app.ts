@@ -32,6 +32,7 @@ import {
   QuickParseParseResponseSchema,
   buildDateUpdatedPrompt,
   DateUpdatedResponseSchema,
+  DateUpdatedResponse,
 } from "./prompts/prompts";
 import { fetchPublicationMetadata } from "./publication";
 import { ArticleData } from "./types";
@@ -474,7 +475,7 @@ app.post("/articles/date-updated", async (req: Request, res: Response) => {
     };
 
     const response = await gptApiCall(requestPayload);
-    const parsedData = response.choices[0].message.parsed;
+    const parsedData: DateUpdatedResponse = response.choices[0].message.parsed;
 
     console.info("date updated parsed data", parsedData);
 
