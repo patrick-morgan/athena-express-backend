@@ -572,6 +572,8 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
           title: parsedData.title,
           date_updated: parsedData.date_updated
             ? new Date(parsedData.date_updated)
+            : article.date_updated
+            ? article.date_updated
             : null,
         },
       });
@@ -591,7 +593,7 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
           date_published: datePublished,
           date_updated: parsedData.date_updated
             ? new Date(parsedData.date_updated)
-            : null,
+            : datePublished,
           text: head + body,
           publication: await getOrCreatePublication(hostname),
         },
