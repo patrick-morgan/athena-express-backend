@@ -25,7 +25,6 @@ import {
   ObjectivityBiasResponse,
   buildSummaryPrompt,
   buildPoliticalBiasPrompt,
-  buildHtmlParsingPrompt,
   buildObjectivityPrompt,
   HTMLParseResponseSchema,
   buildQuickParsingPrompt,
@@ -449,144 +448,144 @@ app.post(
 );
 
 // Quick parse route
-app.post("/articles/quick-parse", async (req: Request, res: Response) => {
-  const {
-    url,
-    hostname,
-    head,
-    body,
-  }: {
-    url: string;
-    hostname: string;
-    head: string;
-    body: string;
-  } = req.body;
+// app.post("/articles/quick-parse", async (req: Request, res: Response) => {
+//   const {
+//     url,
+//     hostname,
+//     head,
+//     body,
+//   }: {
+//     url: string;
+//     hostname: string;
+//     head: string;
+//     body: string;
+//   } = req.body;
 
-  // const htmlSubset = head + body;
+//   // const htmlSubset = head + body;
 
-  try {
-    // Check if the article already exists
-    let article = await prismaLocalClient.article.findFirst({
-      where: { url },
-      include: { article_authors: true },
-    });
+//   try {
+//     // Check if the article already exists
+//     let article = await prismaLocalClient.article.findFirst({
+//       where: { url },
+//       include: { article_authors: true },
+//     });
 
-    // Parse the HTML subset
-    const requestPayload = {
-      prompt: buildQuickParsingPrompt(head, body),
-      zodSchema: HTMLParseResponseSchema,
-      propertyName: "article_data",
-    };
+//     // Parse the HTML subset
+//     const requestPayload = {
+//       prompt: buildQuickParsingPrompt(head, body),
+//       zodSchema: HTMLParseResponseSchema,
+//       propertyName: "article_data",
+//     };
 
-    const gptResponse = await gptApiCall(requestPayload);
-    const parsedData: QuickParseResponse =
-      gptResponse.choices[0].message.parsed;
-    console.info("parsedData", parsedData);
+//     const gptResponse = await gptApiCall(requestPayload);
+//     const parsedData: QuickParseResponse =
+//       gptResponse.choices[0].message.parsed;
+//     console.info("parsedData", parsedData);
 
-    if (article) {
-      // Update existing article
-      console.info("Updating existing article", article.id);
-      article = await prismaLocalClient.article.update({
-        where: { id: article.id },
-        include: { article_authors: true, publicationObject: true },
-        data: {
-          title: parsedData.title,
-          date_updated: parsedData.date_updated
-            ? new Date(parsedData.date_updated)
-            : null,
-        },
-      });
-    } else {
-      // Create new article
-      console.info("Creating new article");
-      const datePublished = parsedData.date_published
-        ? new Date(parsedData.date_published)
-        : parsedData.date_updated
-        ? new Date(parsedData.date_updated)
-        : new Date();
-      article = await prismaLocalClient.article.create({
-        data: {
-          url,
-          title: parsedData.title,
-          date_published: datePublished,
-          date_updated: parsedData.date_updated
-            ? new Date(parsedData.date_updated)
-            : null,
-          text: head + body,
-          publication: await getOrCreatePublication(hostname),
-        },
-        include: { article_authors: true, publicationObject: true },
-      });
+//     if (article) {
+//       // Update existing article
+//       console.info("Updating existing article", article.id);
+//       article = await prismaLocalClient.article.update({
+//         where: { id: article.id },
+//         include: { article_authors: true, publicationObject: true },
+//         data: {
+//           title: parsedData.title,
+//           date_updated: parsedData.date_updated
+//             ? new Date(parsedData.date_updated)
+//             : null,
+//         },
+//       });
+//     } else {
+//       // Create new article
+//       console.info("Creating new article");
+//       const datePublished = parsedData.date_published
+//         ? new Date(parsedData.date_published)
+//         : parsedData.date_updated
+//         ? new Date(parsedData.date_updated)
+//         : new Date();
+//       article = await prismaLocalClient.article.create({
+//         data: {
+//           url,
+//           title: parsedData.title,
+//           date_published: datePublished,
+//           date_updated: parsedData.date_updated
+//             ? new Date(parsedData.date_updated)
+//             : null,
+//           text: head + body,
+//           publication: await getOrCreatePublication(hostname),
+//         },
+//         include: { article_authors: true, publicationObject: true },
+//       });
 
-      const updatedArticle = await updateAuthors(
-        article.id,
-        parsedData.authors,
-        article.publication
-      );
+//       const updatedArticle = await updateAuthors(
+//         article.id,
+//         parsedData.authors,
+//         article.publication
+//       );
 
-      // Create summary
-      await prismaLocalClient.summary.create({
-        data: {
-          article_id: article.id,
-          summary: parsedData.summary,
-          footnotes: {},
-        },
-      });
+//       // Create summary
+//       await prismaLocalClient.summary.create({
+//         data: {
+//           article_id: article.id,
+//           summary: parsedData.summary,
+//           footnotes: {},
+//         },
+//       });
 
-      // Create political bias
-      await prismaLocalClient.polarization_bias.create({
-        data: {
-          article_id: article.id,
-          bias_score: parsedData.political_bias_score,
-          analysis: "",
-          footnotes: {},
-        },
-      });
+//       // Create political bias
+//       await prismaLocalClient.polarization_bias.create({
+//         data: {
+//           article_id: article.id,
+//           bias_score: parsedData.political_bias_score,
+//           analysis: "",
+//           footnotes: {},
+//         },
+//       });
 
-      // Create objectivity bias
-      await prismaLocalClient.objectivity_bias.create({
-        data: {
-          article_id: article.id,
-          rhetoric_score: parsedData.objectivity_score,
-          analysis: "",
-          footnotes: {},
-        },
-      });
-    }
+//       // Create objectivity bias
+//       await prismaLocalClient.objectivity_bias.create({
+//         data: {
+//           article_id: article.id,
+//           rhetoric_score: parsedData.objectivity_score,
+//           analysis: "",
+//           footnotes: {},
+//         },
+//       });
+//     }
 
-    const publication = await prismaLocalClient.publication.findUnique({
-      where: { id: article.publication },
-    });
+//     const publication = await prismaLocalClient.publication.findUnique({
+//       where: { id: article.publication },
+//     });
 
-    const journalists = await prismaLocalClient.journalist.findMany({
-      where: {
-        id: {
-          in: article.article_authors.map((aa) => aa.journalist_id),
-        },
-      },
-    });
+//     const journalists = await prismaLocalClient.journalist.findMany({
+//       where: {
+//         id: {
+//           in: article.article_authors.map((aa) => aa.journalist_id),
+//         },
+//       },
+//     });
 
-    const response = {
-      article,
-      publication: publication,
-      journalists: journalists,
-      summary: parsedData.summary,
-      political_bias_score: parsedData.political_bias_score,
-      objectivity_score: parsedData.objectivity_score,
-    };
+//     const response = {
+//       article,
+//       publication: publication,
+//       journalists: journalists,
+//       summary: parsedData.summary,
+//       political_bias_score: parsedData.political_bias_score,
+//       objectivity_score: parsedData.objectivity_score,
+//     };
 
-    console.info("article_quick_parsed", {
-      article: response,
-      summary: parsedData.summary,
-      political_bias_score: parsedData.political_bias_score,
-      objectivity_score: parsedData.objectivity_score,
-    });
-    res.json(response);
-  } catch (error) {
-    console.error("Error in quick parse:", error);
-    res.status(500).json({ error: "Error in quick parse" });
-  }
-});
+//     console.info("article_quick_parsed", {
+//       article: response,
+//       summary: parsedData.summary,
+//       political_bias_score: parsedData.political_bias_score,
+//       objectivity_score: parsedData.objectivity_score,
+//     });
+//     res.json(response);
+//   } catch (error) {
+//     console.error("Error in quick parse:", error);
+//     res.status(500).json({ error: "Error in quick parse" });
+//   }
+// });
 
 // Full parse route
 app.post("/articles/full-parse", async (req: Request, res: Response) => {
