@@ -546,10 +546,19 @@ app.get("/articles/by-url", async (req: Request, res: Response) => {
       where: { article_id: article.id },
     });
 
+    const journalists = await prismaLocalClient.journalist.findMany({
+      where: {
+        id: {
+          in: article.article_authors.map((aa) => aa.journalist_id),
+        },
+      },
+    });
+
     // Prepare the response
     const response = {
       article,
       summary,
+      journalists,
       political_bias_score: politicalBias?.bias_score,
       objectivity_score: objectivityBias?.rhetoric_score,
       journalistsAnalysis: outJournalistBiases,
