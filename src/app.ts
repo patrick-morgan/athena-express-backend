@@ -693,8 +693,6 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
     body: string;
   } = req.body;
 
-  // const htmlSubset = head + body;
-
   try {
     // Check if the article already exists
     let article = await prismaLocalClient.article.findFirst({
@@ -754,12 +752,6 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
         include: { article_authors: true, publicationObject: true },
       });
 
-      const updatedArticle = await updateAuthors(
-        article.id,
-        parsedData.authors,
-        article.publication
-      );
-
       // Create summary
       await prismaLocalClient.summary.create({
         data: {
@@ -790,20 +782,26 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
       });
     }
 
+    const updatedArticle = await updateAuthors(
+      article.id,
+      parsedData.authors,
+      article.publication
+    );
+
     const publication = await prismaLocalClient.publication.findUnique({
-      where: { id: article.publication },
+      where: { id: updatedArticle.publication },
     });
 
     const journalists = await prismaLocalClient.journalist.findMany({
       where: {
         id: {
-          in: article.article_authors.map((aa) => aa.journalist_id),
+          in: updatedArticle.article_authors.map((aa) => aa.journalist_id),
         },
       },
     });
 
     const response = {
-      article,
+      article: updatedArticle,
       publication: publication,
       journalists: journalists,
       summary: parsedData.summary,
@@ -1439,6 +1437,8 @@ app.use("*", (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
+console.log("env port", process.env.port);
+console.log("running on port", PORT);
 app.listen(PORT, () => {
   console.info(`Server is running on port ${PORT}`);
 });
