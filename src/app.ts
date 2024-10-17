@@ -618,61 +618,82 @@ app.post("/articles/date-updated", async (req: Request, res: Response) => {
 
     let needsUpdate = false;
 
+    const normalizeDate = (dateString: string): string => {
+      const date = new Date(dateString);
+      return date.toISOString().split(".")[0] + "Z";
+    };
+
     if (parsedData.date_updated) {
       console.info("parsedData.date_updated", parsedData.date_updated);
-      const newDateUpdated = new Date(parsedData.date_updated);
-      if (!article.date_updated || newDateUpdated !== article.date_updated) {
-        if (!article.date_updated) {
-          console.info("article.date_updated is null, setting it");
-        }
-        // if (article.date_updated && newDateUpdated > article.date_updated) {
-        //   console.log("greater than condition");
-        //   console.log("new date updated", newDateUpdated);
-        //   console.log("article.date_updated", article.date_updated);
-        // }
-        console.info("updating date_updated", newDateUpdated);
-        article = await prismaLocalClient.article.update({
-          where: { id: article.id },
-          data: { date_updated: newDateUpdated },
-          include: { article_authors: true, publicationObject: true },
-        });
-        needsUpdate = true;
+      // const newDateUpdated = new Date(parsedData.date_updated);
+      const normalizedParsed = normalizeDate(parsedData.date_updated);
+      const normalizedCurrent = article.date_updated
+        ? normalizeDate(article.date_updated.toISOString())
+        : null;
+
+      if (!normalizedCurrent || normalizedParsed !== normalizedCurrent) {
+        // needsUpdate = true;
+        return res.json({ needsUpdate: true });
+        // article = await prismaLocalClient.article.update({
+        //   where: { id: article.id },
+        //   data: { date_updated: new Date(normalizedParsed) },
+        //   include: { article_authors: true, publicationObject: true },
+        // });
       }
+
+      // if (!article.date_updated || newDateUpdated !== article.date_updated) {
+      //   if (!article.date_updated) {
+      //     console.info("article.date_updated is null, setting it");
+      //   }
+      //   // if (article.date_updated && newDateUpdated > article.date_updated) {
+      //   //   console.log("greater than condition");
+      //   //   console.log("new date updated", newDateUpdated);
+      //   //   console.log("article.date_updated", article.date_updated);
+      //   // }
+      //   console.info("updating date_updated", newDateUpdated);
+      //   article = await prismaLocalClient.article.update({
+      //     where: { id: article.id },
+      //     data: { date_updated: newDateUpdated },
+      //     include: { article_authors: true, publicationObject: true },
+      //   });
+      //   needsUpdate = true;
+      // }
     }
 
-    let summary: any | null = null;
-    let politicalBias: any | null = null;
-    let objectivityBias: any | null = null;
-    let journalists: any | null = null;
+    // let summary: any | null = null;
+    // let politicalBias: any | null = null;
+    // let objectivityBias: any | null = null;
+    // let journalists: any | null = null;
 
-    if (!needsUpdate) {
-      // Fetch summary, political bias, and objectivity bias
-      summary = await prismaLocalClient.summary.findFirst({
-        where: { article_id: article.id },
-      });
-      politicalBias = await prismaLocalClient.polarization_bias.findFirst({
-        where: { article_id: article.id },
-      });
-      objectivityBias = await prismaLocalClient.objectivity_bias.findFirst({
-        where: { article_id: article.id },
-      });
-      journalists = await prismaLocalClient.journalist.findMany({
-        where: {
-          id: {
-            in: article.article_authors.map((aa) => aa.journalist_id),
-          },
-        },
-      });
-    }
+    // if (!needsUpdate) {
+    //   // Fetch summary, political bias, and objectivity bias
+    //   summary = await prismaLocalClient.summary.findFirst({
+    //     where: { article_id: article.id },
+    //   });
+    //   politicalBias = await prismaLocalClient.polarization_bias.findFirst({
+    //     where: { article_id: article.id },
+    //   });
+    //   objectivityBias = await prismaLocalClient.objectivity_bias.findFirst({
+    //     where: { article_id: article.id },
+    //   });
+    //   journalists = await prismaLocalClient.journalist.findMany({
+    //     where: {
+    //       id: {
+    //         in: article.article_authors.map((aa) => aa.journalist_id),
+    //       },
+    //     },
+    //   });
+    // }
+    res.json({ needsUpdate: false });
 
-    res.json({
-      article,
-      needsUpdate,
-      journalists,
-      summary: summary?.summary || null,
-      political_bias_score: politicalBias?.bias_score || null,
-      objectivity_score: objectivityBias?.rhetoric_score || null,
-    });
+    // res.json({
+    //   article,
+    //   needsUpdate,
+    //   journalists,
+    //   summary: summary?.summary || null,
+    //   political_bias_score: politicalBias?.bias_score || null,
+    //   objectivity_score: objectivityBias?.rhetoric_score || null,
+    // });
   } catch (error) {
     console.error("Error in date-updated check:", error);
     res.status(500).json({ error: "Error in date-updated check" });

@@ -150,7 +150,7 @@ Body subset:
 ${bodySubset}
 
 Rules:
-1. If you find a new or different "date updated" or "last modified" date, return it in ISO 8601 string (e.g., "2024-09-26T14:30:00Z"). If only the date is available without a specific time, use midnight UTC (e.g., "2024-09-26T00:00:00Z"). If the time zone is specified, it should be specified right after the time, convert to UTC. If no time zone is specified, assume it's in eastern daylighttime, convert to UTC, and append 'Z' to indicate UTC.
+1. If you find a date updated or last modified date, return it in ISO 8601 format (YYYY-MM-DDTHH:mm:ss.sssZ). If the time zone is specified, it should be specified right after the time, convert to UTC. If no time zone is specified, assume it's in eastern daylighttime, convert to UTC, and append 'Z' to indicate UTC.
 2. If you don't find any "date updated" or "last modified" date, or if it's the same as the current known date, return null.
 3. Only return the date if you're confident it represents when the article was last updated or modified.
 `;
