@@ -451,6 +451,134 @@ app.post(
   }
 );
 
+app.get("/articles/by-url", async (req: Request, res: Response) => {
+  const { url } = req.query;
+  console.info("Request received for articles/by-url", { url });
+
+  if (!url || typeof url !== "string") {
+    return res.status(400).json({ error: "Invalid URL parameter" });
+  }
+
+  try {
+    // Fetch the article
+    const article = await prismaLocalClient.article.findFirst({
+      where: { url },
+      include: {
+        article_authors: {
+          include: {
+            journalist: true,
+          },
+        },
+        publicationObject: true,
+      },
+    });
+    console.info("article", article);
+
+    if (!article) {
+      return res.json({ article: null });
+    }
+
+    const authors = article.article_authors.map(
+      (author) => author.journalist_id
+    );
+
+    type JournalistBiasWithName = journalist_bias & { name: string };
+    const outJournalistBiases: JournalistBiasWithName[] = [];
+
+    for (const journalistId of authors) {
+      const journalist = await prismaLocalClient.journalist.findFirst({
+        where: { id: journalistId },
+        include: { article_authors: true },
+      });
+
+      if (!journalist) {
+        continue;
+      }
+
+      const journalistBias = await prismaLocalClient.journalist_bias.findFirst({
+        where: { journalist: journalist.id },
+      });
+
+      if (journalistBias) {
+        outJournalistBiases.push({ name: journalist.name, ...journalistBias });
+      }
+    }
+    console.info("outJournalistBiases", outJournalistBiases.length);
+
+    // Fetch journalists analysis
+    // const journalistsAnalysis = await prismaLocalClient.journalist_bias.findMany({
+    //   where: {
+    //     journalist: {
+    //       id: {
+    //         in: article.article_authors.map((aa) => aa.journalist.id),
+    //       },
+    //     },
+    //   },
+    //   include: {
+    //     journalist: true,
+    //   },
+    // });
+
+    // Fetch publication analysis
+    const publicationAnalysis =
+      await prismaLocalClient.publication_bias.findFirst({
+        where: {
+          publication: article.publication,
+        },
+        include: {
+          publicationObject: true,
+        },
+      });
+    console.info("publicationAnalysis", publicationAnalysis);
+
+    // Get summary
+    const summary = await prismaLocalClient.summary.findFirst({
+      where: { article_id: article.id },
+    });
+
+    // Get political bias
+    const politicalBias = await prismaLocalClient.polarization_bias.findFirst({
+      where: { article_id: article.id },
+    });
+
+    // Get objectivity bias
+    const objectivityBias = await prismaLocalClient.objectivity_bias.findFirst({
+      where: { article_id: article.id },
+    });
+
+    // Prepare the response
+    const response = {
+      article,
+      summary,
+      political_bias_score: politicalBias?.bias_score,
+      objectivity_score: objectivityBias?.rhetoric_score,
+      journalistsAnalysis: outJournalistBiases,
+      publicationAnalysis: publicationAnalysis
+        ? {
+            publication: publicationAnalysis.publicationObject,
+            analysis: {
+              id: publicationAnalysis.id,
+              publication: publicationAnalysis.publication,
+              num_articles_analyzed: publicationAnalysis.num_articles_analyzed,
+              rhetoric_score: publicationAnalysis.rhetoric_score,
+              bias_score: publicationAnalysis.bias_score,
+              summary: publicationAnalysis.summary,
+              created_at: publicationAnalysis.created_at,
+              updated_at: publicationAnalysis.updated_at,
+            },
+          }
+        : null,
+    };
+
+    console.info("Sending response");
+
+    res.json(response);
+  } catch (error) {
+    console.error("Error fetching article by URL:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 app.post("/articles/date-updated", async (req: Request, res: Response) => {
   const { url, head, body } = req.body;
 
