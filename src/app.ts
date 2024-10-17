@@ -557,7 +557,7 @@ app.get("/articles/by-url", async (req: Request, res: Response) => {
     // Prepare the response
     const response = {
       article,
-      summary,
+      summary: summary?.summary ?? "",
       journalists,
       political_bias_score: politicalBias?.bias_score,
       objectivity_score: objectivityBias?.rhetoric_score,
