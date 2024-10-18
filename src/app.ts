@@ -36,6 +36,7 @@ import {
 } from "./prompts/prompts";
 import { fetchPublicationMetadata } from "./publication";
 import { ArticleData } from "./types";
+import { analyzeJournalistById, JournalistBiasWithName } from "./journalist";
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "");
@@ -1151,146 +1152,57 @@ app.post(
   }
 );
 
+// New route for analyzing a single journalist
+app.post(
+  "/analyze-journalist",
+  async (req: Request<{}, {}, { journalistId: string }>, res: Response) => {
+    const { journalistId } = req.body;
+
+    try {
+      const journalistAnalysis = await analyzeJournalistById(journalistId);
+      res.json(journalistAnalysis);
+    } catch (error) {
+      console.error("Error analyzing journalist:", error);
+      res.status(500).json({ error: "Error analyzing journalist" });
+    }
+  }
+);
+
 type AnalyzeJournalistsPayload = {
   articleId: string;
 };
-// Create or get journalists biases
+
+// Updated route for analyzing multiple journalists
 app.post(
   "/analyze-journalists",
   async (req: Request<{}, {}, AnalyzeJournalistsPayload>, res: Response) => {
     const { articleId } = req.body;
-    // Get article by id
-    const article = await prismaLocalClient.article.findFirst({
-      where: { id: articleId },
-      include: {
-        article_authors: true,
-      },
-    });
-    if (!article) {
-      console.error("Error analyzing journalists -- Article not found");
-      return res.status(500).json({ error: "Article not found" });
-    }
-    const { title, date_published, date_updated, url, text, article_authors } =
-      article;
-    const hostname = getHostname(url);
-    const authors = article_authors.map((author) => author.journalist_id);
 
-    const publication = await prismaLocalClient.publication.findFirst({
-      where: { hostname },
-    });
-    if (!publication) {
-      return res.status(500).json({ error: "Publication not found" });
-    }
-
-    type JournalistBiasWithName = journalist_bias & { name: string };
-    const outJournalistBiases: JournalistBiasWithName[] = [];
-
-    for (const journalistId of authors) {
-      const journalist = await prismaLocalClient.journalist.findFirst({
-        where: { id: journalistId },
-        include: { article_authors: true },
-      });
-      if (!journalist) {
-        return res.status(500).json({ error: "Journalist not found" });
-      }
-      // Number of articles this journalist has written
-      const numArticlesWritten = journalist.article_authors.length;
-      // Get bias if num articles written is same as what we have already analyzed (hence no changes to re-analyze)
-      const existingBias = await prismaLocalClient.journalist_bias.findFirst({
-        where: {
-          journalist: journalist.id,
-          num_articles_analyzed: numArticlesWritten,
+    try {
+      const article = await prismaLocalClient.article.findFirst({
+        where: { id: articleId },
+        include: {
+          article_authors: true,
         },
       });
-      if (existingBias) {
-        console.info("Existing journalist bias:", existingBias);
-        outJournalistBiases.push({ name: journalist.name, ...existingBias });
-        continue;
+
+      if (!article) {
+        console.error("Error analyzing journalists -- Article not found");
+        return res.status(404).json({ error: "Article not found" });
       }
-      // Create journalist bias
-      // Aggregate all article_ids this journalist has written
-      const articleIds = journalist.article_authors.map(
-        (article) => article.article_id
+
+      const authors = article.article_authors.map(
+        (author) => author.journalist_id
       );
-      // Average bias score of all articles this journalist has written
-      const analysis: JournalistAnalysisData = {
-        // journalist: journalist.id,
-        averagePolarization: 50,
-        averageObjectivity: 50,
-        summaries: [],
-      };
+      const journalistAnalyses: JournalistBiasWithName[] = await Promise.all(
+        authors.map(analyzeJournalistById)
+      );
 
-      const polarizationBiases =
-        await prismaLocalClient.polarization_bias.findMany({
-          where: { article_id: { in: articleIds } },
-        });
-
-      if (polarizationBiases.length > 0) {
-        let totalPolarizationBiasScore = new Decimal(0);
-        polarizationBiases.forEach((bias) => {
-          totalPolarizationBiasScore = totalPolarizationBiasScore.plus(
-            bias.bias_score
-          );
-        });
-        const averagePolarizationBiasScore =
-          totalPolarizationBiasScore.dividedBy(polarizationBiases.length);
-        analysis["averagePolarization"] = parseFloat(
-          averagePolarizationBiasScore.toNumber().toFixed(1)
-        );
-      }
-
-      const objectivityBiases =
-        await prismaLocalClient.objectivity_bias.findMany({
-          where: { article_id: { in: articleIds } },
-        });
-      if (objectivityBiases.length > 0) {
-        let totalObjectivityBiasScore = new Decimal(0);
-        objectivityBiases.forEach((bias) => {
-          totalObjectivityBiasScore = totalObjectivityBiasScore.plus(
-            bias.rhetoric_score
-          );
-        });
-        const averageObjectivityBiasScore = totalObjectivityBiasScore.dividedBy(
-          objectivityBiases.length
-        );
-        analysis["averageObjectivity"] = parseFloat(
-          averageObjectivityBiasScore.toNumber().toFixed(1)
-        );
-      }
-
-      // Aggregate summaries of all articles this journalist has written
-      const summaries = await prismaLocalClient.summary.findMany({
-        where: { article_id: { in: articleIds } },
-      });
-      const summaryText: string[] = summaries.map((summary) => summary.summary);
-      analysis["summaries"] = summaryText;
-      console.info("Journalist bias pre-analysis data struct", analysis);
-
-      // Get journalist analysis
-      const journalistAnalysis = await analyzeJournalistBias(analysis);
-      if (!journalistAnalysis) {
-        return res
-          .status(500)
-          .json({ error: "Error analyzing journalist bias" });
-      }
-      // Construct new analysis
-      const newJournalistBias = await prismaLocalClient.journalist_bias.create({
-        data: {
-          journalist: journalist.id,
-          num_articles_analyzed: numArticlesWritten,
-          rhetoric_score: analysis.averageObjectivity,
-          bias_score: analysis.averagePolarization,
-          summary: journalistAnalysis.analysis,
-        },
-      });
-      console.info("Created journalist bias:", newJournalistBias);
-      outJournalistBiases.push({
-        name: journalist.name,
-        ...newJournalistBias,
-      });
+      res.json(journalistAnalyses);
+    } catch (error) {
+      console.error("Error analyzing journalists:", error);
+      res.status(500).json({ error: "Error analyzing journalists" });
     }
-    console.info("Out journalist biases", outJournalistBiases);
-    res.json(outJournalistBiases);
   }
 );
 
@@ -1426,6 +1338,69 @@ app.post(
     } catch (error) {
       console.error("Error analyzing objectivity:", error);
       return res.status(500).json({ error: "Error analyzing objectivity" });
+    }
+  }
+);
+
+app.get(
+  "/journalists/:journalistId/articles",
+  async (req: Request, res: Response) => {
+    const { journalistId } = req.params;
+
+    try {
+      const articles = await prismaLocalClient.article.findMany({
+        where: {
+          article_authors: {
+            some: {
+              journalist_id: journalistId,
+            },
+          },
+        },
+        select: {
+          id: true,
+          url: true,
+          title: true,
+          date_published: true,
+          date_updated: true,
+          publication: true,
+          article_authors: {
+            select: {
+              journalist: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+          publicationObject: {
+            select: {
+              id: true,
+              name: true,
+              hostname: true,
+            },
+          },
+        },
+        orderBy: {
+          date_published: "desc",
+        },
+        take: 20, // Limit to 20 articles
+      });
+
+      // Format the response
+      const formattedArticles = articles.map((article) => ({
+        ...article,
+        text: "", // Set text to empty string
+        journalists: article.article_authors.map((aa) => aa.journalist),
+        publication: article.publicationObject,
+        article_authors: undefined, // Remove this field from the response
+        publicationObject: undefined, // Remove this field from the response
+      }));
+
+      res.json({ articles: formattedArticles });
+    } catch (error) {
+      console.error("Error fetching journalist articles:", error);
+      res.status(500).json({ error: "Error fetching journalist articles" });
     }
   }
 );
