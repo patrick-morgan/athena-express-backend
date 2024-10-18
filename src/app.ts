@@ -737,7 +737,14 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
       console.info("Updating existing article", article.id);
       article = await prismaLocalClient.article.update({
         where: { id: article.id },
-        include: { article_authors: true, publicationObject: true },
+        include: {
+          article_authors: {
+            include: {
+              journalist: true,
+            },
+          },
+          publicationObject: true,
+        },
         data: {
           title: parsedData.title,
           date_published: parsedData.date_published
@@ -770,7 +777,14 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
           text: head + body,
           publication: await getOrCreatePublication(hostname),
         },
-        include: { article_authors: true, publicationObject: true },
+        include: {
+          article_authors: {
+            include: {
+              journalist: true,
+            },
+          },
+          publicationObject: true,
+        },
       });
 
       // Create summary
@@ -1010,7 +1024,13 @@ async function updateAuthors(
   // Fetch and return the updated article with authors
   const updatedArticle = await prismaLocalClient.article.findUnique({
     where: { id: articleId },
-    include: { article_authors: true },
+    include: {
+      article_authors: {
+        include: {
+          journalist: true,
+        },
+      },
+    },
   });
 
   return updatedArticle!;
