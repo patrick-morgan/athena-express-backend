@@ -1405,6 +1405,57 @@ app.get(
   }
 );
 
+app.get(
+  "/publications/:publicationId/articles",
+  async (req: Request, res: Response) => {
+    const { publicationId } = req.params;
+
+    try {
+      const articles = await prismaLocalClient.article.findMany({
+        where: {
+          publication: publicationId,
+        },
+        include: {
+          article_authors: {
+            include: {
+              journalist: true,
+            },
+          },
+          publicationObject: true,
+        },
+        orderBy: {
+          date_published: "desc",
+        },
+        take: 20, // Limit to 20 articles, adjust as needed
+      });
+
+      // Format the response to match ArticleModel
+      const formattedArticles = articles.map((article) => ({
+        id: article.id,
+        url: article.url,
+        title: article.title,
+        date_published: article.date_published,
+        date_updated: article.date_updated,
+        text: "", // Set to empty string to reduce payload size
+        journalists: article.article_authors.map((aa) => ({
+          id: aa.journalist.id,
+          name: aa.journalist.name,
+        })),
+        publication: {
+          id: article.publicationObject.id,
+          name: article.publicationObject.name,
+          hostname: article.publicationObject.hostname,
+        },
+      }));
+
+      res.json({ articles: formattedArticles });
+    } catch (error) {
+      console.error("Error fetching publication articles:", error);
+      res.status(500).json({ error: "Error fetching publication articles" });
+    }
+  }
+);
+
 // Get all articles
 app.get("/articles", async (req, res) => {
   try {
