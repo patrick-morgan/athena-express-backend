@@ -12,14 +12,14 @@ export const getOrCreatePublication = async (hostname: string) => {
   let publication = await prismaLocalClient.publication.findFirst({
     where: { hostname },
   });
+  console.info("Publication found in database:", publication);
 
-  // if (publication) {
+  if (publication && publication.name) {
+    console.info("Publication has name so returning");
+    return publication;
+  }
 
-  //   console.info("Publication found in database:", publication);
-  //   return publication;
-  // }
-
-  // If not found in the database, fetch metadata using GPT
+  // If publication doesn't have a name yet, run prompt
   const prompt = buildPublicationMetadataPrompt(hostname);
 
   const requestPayload = {
@@ -55,7 +55,7 @@ export const getOrCreatePublication = async (hostname: string) => {
             : null,
         },
       });
-      console.log("updated publication", publication);
+      console.log("Updated publication", publication);
     } else {
       // Create a new publication in the database
       publication = await prismaLocalClient.publication.create({
@@ -67,10 +67,9 @@ export const getOrCreatePublication = async (hostname: string) => {
             : null,
         },
       });
-      console.log("created new publication", publication);
+      console.log("Created new publication", publication);
     }
 
-    console.info("New publication created in database:", publication);
     return publication;
   } catch (error) {
     console.error("Error fetching hostname metadata:", error);
