@@ -34,7 +34,7 @@ import {
   DateUpdatedResponseSchema,
   DateUpdatedResponse,
 } from "./prompts/prompts";
-import { fetchPublicationMetadata } from "./publication";
+import { getOrCreatePublication } from "./publication";
 import { ArticleData } from "./types";
 import { analyzeJournalistById, JournalistBiasWithName } from "./journalist";
 
@@ -526,6 +526,9 @@ app.get("/articles/by-url", async (req: Request, res: Response) => {
         where: {
           publication: article.publication,
         },
+        orderBy: {
+          created_at: "desc",
+        },
         include: {
           publicationObject: true,
         },
@@ -776,7 +779,7 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
             ? new Date(parsedData.date_updated)
             : datePublished,
           text: head + body,
-          publication: await getOrCreatePublication(hostname),
+          publication: (await getOrCreatePublication(hostname)).id,
         },
         include: {
           article_authors: {
@@ -903,7 +906,7 @@ app.post("/articles/full-parse", async (req: Request, res: Response) => {
           date_published: articleData.date_published,
           date_updated: articleData.date_updated,
           text: articleData.text,
-          publication: await getOrCreatePublication(articleData.hostname),
+          publication: (await getOrCreatePublication(articleData.hostname)).id,
         },
         include: { article_authors: true },
       });
@@ -958,39 +961,39 @@ app.post("/articles/full-parse", async (req: Request, res: Response) => {
   }
 });
 
-// Publication metadata route
-app.post("/publication-metadata", async (req: Request, res: Response) => {
-  const { hostname } = req.body;
+// // Publication metadata route
+// app.post("/publication-metadata", async (req: Request, res: Response) => {
+//   const { hostname } = req.body;
 
-  try {
-    const publication = await fetchPublicationMetadata(hostname);
-    res.json(publication);
-  } catch (error) {
-    console.error("Error fetching publication metadata:", error);
-    res.status(500).json({ error: "Error fetching publication metadata" });
-  }
-});
+//   try {
+//     const publication = await getOrCreatePublication(hostname);
+//     res.json(publication);
+//   } catch (error) {
+//     console.error("Error fetching publication metadata:", error);
+//     res.status(500).json({ error: "Error fetching publication metadata" });
+//   }
+// });
 
-async function getOrCreatePublication(hostname: string) {
-  let publication = await prismaLocalClient.publication.findFirst({
-    where: { hostname },
-  });
+// async function getOrCreatePublication(hostname: string) {
+//   let publication = await prismaLocalClient.publication.findFirst({
+//     where: { hostname },
+//   });
 
-  if (!publication) {
-    const metadata = await fetchPublicationMetadata(hostname);
-    publication = await prismaLocalClient.publication.create({
-      data: {
-        hostname,
-        name: metadata.name,
-        date_founded: metadata.date_founded
-          ? new Date(metadata.date_founded)
-          : null,
-      },
-    });
-  }
+//   if (!publication) {
+//     const publication = await fetchPublicationMetadata(hostname);
+//     // publication = await prismaLocalClient.publication.create({
+//     //   data: {
+//     //     hostname,
+//     //     name: metadata.name,
+//     //     date_founded: metadata.date_founded
+//     //       ? new Date(metadata.date_founded)
+//     //       : null,
+//     //   },
+//     // });
+//   }
 
-  return publication.id;
-}
+//   return publication.id;
+// }
 
 async function updateAuthors(
   articleId: string,
@@ -1474,28 +1477,6 @@ app.get("/articles", async (req, res) => {
     res.status(500).json({ error: "Error fetching articles" });
   }
 });
-
-type PublicationMetadataRequestBody = {
-  hostname: string;
-};
-
-// Route to get publication metadata
-app.post(
-  "/get-publication-metadata",
-  async (
-    req: Request<{}, {}, PublicationMetadataRequestBody>,
-    res: Response
-  ) => {
-    const { hostname } = req.body;
-    try {
-      const metadata = await fetchPublicationMetadata(hostname);
-      res.json(metadata);
-    } catch (error) {
-      console.error("Error fetching publication metadata:", error);
-      res.status(500).json({ error: "Error fetching publication metadata" });
-    }
-  }
-);
 
 // Catch-all route for debugging
 app.use("*", (req, res) => {

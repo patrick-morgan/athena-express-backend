@@ -208,9 +208,9 @@ export type PublicationMetadataResponse = z.infer<
 >;
 
 export const buildPublicationMetadataPrompt = (hostname: string) => `
-Given the hostname of a news company (e.g., www.cnn.com), return the human-friendly name (or what the news company is commonly referred as) of the new company and the date it was founded in format MM/DD/YYYY. For example, for "www.cnn.com" the correct response would be "CNN".
+Given the hostname of a website (e.g., www.cnn.com), return the human-friendly name of the company who owns the website (or what the company is commonly referred as) and the date it was founded in format MM/DD/YYYY. For many hostnames you should be able to infer the company, but not always, for example, for "www.cnn.com" the correct response would be "CNN".
 
-If there is confusion or you cannot retrieve the proper human-readable name, please respond with the url but remove www. (e.g. www.github.com would be github.com) for the name field. If the date the news company was founded is not in your knowledge or is confusing/could have multiple interpretations, please respond with an empty string '' for the date_founded field.
+If you do not have knowledge on the name of the company, simply respond with the url but remove www. (e.g. www.peoplespress.com would be peoplespress.com) for the name field. If the date the company was founded is not in your knowledge, please respond with an empty string '' for the date_founded field.
 
 The accuracy of this information is important.
 
