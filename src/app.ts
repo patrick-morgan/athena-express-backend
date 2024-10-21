@@ -722,7 +722,7 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
     // Check if the article already exists
     let article = await prismaLocalClient.article.findFirst({
       where: { url },
-      include: { article_authors: true },
+      include: { article_authors: true, publicationObject: true },
     });
 
     const requestPayload = {
@@ -1034,6 +1034,7 @@ async function updateAuthors(
           journalist: true,
         },
       },
+      publicationObject: true,
     },
   });
 
