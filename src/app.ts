@@ -718,12 +718,16 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
     body: string;
   } = req.body;
 
+  console.info("Engaging quick parse");
+
   try {
     // Check if the article already exists
     let article = await prismaLocalClient.article.findFirst({
       where: { url },
       include: { article_authors: true, publicationObject: true },
     });
+
+    console.log("article", article?.id);
 
     const requestPayload = {
       prompt: buildQuickParsingPrompt(head, body),
@@ -732,6 +736,16 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
     };
 
     const gptResponse = await gptApiCall(requestPayload);
+    // try {
+    //   const gptResponse = await gptApiCall(requestPayload);
+    //   // ... rest of the code ...
+    // } catch (gptError) {
+    //   console.error("GPT API Error details:", {
+    //     error: gptError,
+    //   });
+    //   throw gptError;
+    // }
+    console.log("gpt response", gptResponse);
     const parsedData: QuickParseResponse =
       gptResponse.choices[0].message.parsed;
     console.info("parsedData", parsedData);
