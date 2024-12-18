@@ -37,6 +37,7 @@ import {
 import { getOrCreatePublication } from "./publication";
 import { ArticleData } from "./types";
 import { analyzeJournalistById, JournalistBiasWithName } from "./journalist";
+import { CronJob } from "cron";
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "");
@@ -184,6 +185,36 @@ async function getOrCreateStripeCustomer(
   }
 
   return customer;
+}
+
+// Helper function to check user subscription
+async function checkUserSubscription(userId: string): Promise<boolean> {
+  try {
+    const user = await admin.auth().getUser(userId);
+    if (!user.email) {
+      return false;
+    }
+
+    // Check with Stripe
+    const customer = await stripe.customers.list({
+      email: user.email,
+      limit: 1,
+    });
+
+    if (customer.data.length === 0) {
+      return false;
+    }
+
+    const subscriptions = await stripe.subscriptions.list({
+      customer: customer.data[0].id,
+      status: "active",
+    });
+
+    return subscriptions.data.length > 0;
+  } catch (error) {
+    console.error("Error checking subscription:", error);
+    return false;
+  }
 }
 
 app.post(
@@ -1505,3 +1536,147 @@ console.log("running on port", PORT);
 app.listen(PORT, () => {
   console.info(`Server is running on port ${PORT}`);
 });
+
+const MONTHLY_FREE_ARTICLES = 10;
+
+// Get user's current usage
+app.get(
+  "/user/usage",
+  verifyFirebaseToken,
+  async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user?.uid;
+
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+      // Check if user is subscribed
+      const isSubscribed = await checkUserSubscription(userId);
+      if (isSubscribed) {
+        return res.json({
+          articlesRemaining: Infinity,
+          totalAllowed: Infinity,
+          nextResetDate: null,
+        });
+      }
+
+      // Get or create user usage record
+      let userUsage = await prismaLocalClient.userUsage.findUnique({
+        where: { userId },
+      });
+
+      if (!userUsage) {
+        userUsage = await prismaLocalClient.userUsage.create({
+          data: {
+            userId,
+            articlesUsed: 0,
+          },
+        });
+      }
+
+      // Calculate next reset date (1st of next month)
+      const now = new Date();
+      const nextReset = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+      res.json({
+        articlesRemaining: MONTHLY_FREE_ARTICLES - userUsage.articlesUsed,
+        totalAllowed: MONTHLY_FREE_ARTICLES,
+        nextResetDate: nextReset.toISOString(),
+      });
+    } catch (error) {
+      console.error("Error getting user usage:", error);
+      res.status(500).json({ error: "Error getting user usage" });
+    }
+  }
+);
+
+// Track article analysis
+app.post(
+  "/user/usage/track-analysis",
+  verifyFirebaseToken,
+  async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user?.uid;
+
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+      // Check if user is subscribed
+      const isSubscribed = await checkUserSubscription(userId);
+      if (isSubscribed) {
+        return res.json({
+          articlesRemaining: Infinity,
+          totalAllowed: Infinity,
+          nextResetDate: null,
+        });
+      }
+
+      let userUsage = await prismaLocalClient.userUsage.findUnique({
+        where: { userId },
+      });
+
+      if (!userUsage) {
+        userUsage = await prismaLocalClient.userUsage.create({
+          data: {
+            userId,
+            articlesUsed: 1,
+          },
+        });
+      } else {
+        if (userUsage.articlesUsed >= MONTHLY_FREE_ARTICLES) {
+          return res.status(403).json({
+            error: "Monthly article limit reached",
+            articlesRemaining: 0,
+            totalAllowed: MONTHLY_FREE_ARTICLES,
+          });
+        }
+
+        userUsage = await prismaLocalClient.userUsage.update({
+          where: { userId },
+          data: {
+            articlesUsed: userUsage.articlesUsed + 1,
+          },
+        });
+      }
+
+      // Calculate next reset date
+      const now = new Date();
+      const nextReset = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+      res.json({
+        articlesRemaining: MONTHLY_FREE_ARTICLES - userUsage.articlesUsed,
+        totalAllowed: MONTHLY_FREE_ARTICLES,
+        nextResetDate: nextReset.toISOString(),
+      });
+    } catch (error) {
+      console.error("Error tracking article analysis:", error);
+      res.status(500).json({ error: "Error tracking article analysis" });
+    }
+  }
+);
+
+// Monthly reset cron job
+const resetUsageCron = new CronJob(
+  "0 0 1 * *",
+  async () => {
+    try {
+      console.log("Resetting monthly article usage counts...");
+      await prismaLocalClient.userUsage.updateMany({
+        data: {
+          articlesUsed: 0,
+        },
+      });
+      console.log("Successfully reset all user article counts");
+    } catch (error) {
+      console.error("Error resetting article counts:", error);
+    }
+  },
+  null,
+  true,
+  "UTC"
+);
+
+// Start the cron job
+resetUsageCron.start();
