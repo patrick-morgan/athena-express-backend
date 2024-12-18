@@ -1524,19 +1524,6 @@ app.get("/articles", async (req, res) => {
   }
 });
 
-// Catch-all route for debugging
-app.use("*", (req, res) => {
-  console.info(`Received request for ${req.originalUrl}`);
-  res.status(404).send("Not Found");
-});
-
-const PORT = process.env.PORT || 3000;
-console.log("env port", process.env.port);
-console.log("running on port", PORT);
-app.listen(PORT, () => {
-  console.info(`Server is running on port ${PORT}`);
-});
-
 const MONTHLY_FREE_ARTICLES = 10;
 
 // Get user's current usage
@@ -1680,3 +1667,16 @@ const resetUsageCron = new CronJob(
 
 // Start the cron job
 resetUsageCron.start();
+
+// Catch-all route for debugging
+app.use("*", (req, res) => {
+  console.info(`Received request for ${req.originalUrl}`);
+  res.status(404).send("Not Found");
+});
+
+const PORT = process.env.PORT || 3000;
+console.log("env port", process.env.port);
+console.log("running on port", PORT);
+app.listen(PORT, () => {
+  console.info(`Server is running on port ${PORT}`);
+});
