@@ -1544,7 +1544,6 @@ app.get(
         return res.json({
           articlesRemaining: Infinity,
           totalAllowed: Infinity,
-          nextResetDate: null,
         });
       }
 
@@ -1552,6 +1551,7 @@ app.get(
       let userUsage = await prismaLocalClient.userUsage.findUnique({
         where: { userId },
       });
+      console.info("userUsage:", userUsage);
 
       if (!userUsage) {
         userUsage = await prismaLocalClient.userUsage.create({
@@ -1562,14 +1562,9 @@ app.get(
         });
       }
 
-      // Calculate next reset date (1st of next month)
-      const now = new Date();
-      const nextReset = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
       res.json({
         articlesRemaining: MONTHLY_FREE_ARTICLES - userUsage.articlesUsed,
         totalAllowed: MONTHLY_FREE_ARTICLES,
-        nextResetDate: nextReset.toISOString(),
       });
     } catch (error) {
       console.error("Error getting user usage:", error);
@@ -1596,13 +1591,14 @@ app.post(
         return res.json({
           articlesRemaining: Infinity,
           totalAllowed: Infinity,
-          nextResetDate: null,
         });
       }
 
       let userUsage = await prismaLocalClient.userUsage.findUnique({
         where: { userId },
       });
+
+      console.log("userUsage:", userUsage);
 
       if (!userUsage) {
         userUsage = await prismaLocalClient.userUsage.create({
@@ -1613,9 +1609,13 @@ app.post(
         });
       } else {
         if (userUsage.articlesUsed >= MONTHLY_FREE_ARTICLES) {
-          return res.status(403).json({
-            error: "Monthly article limit reached",
-            articlesRemaining: 0,
+          // return res.status(403).json({
+          //   error: "Monthly article limit reached",
+          //   articlesRemaining: 0,
+          //   totalAllowed: MONTHLY_FREE_ARTICLES,
+          // });
+          return res.json({
+            articlesRemaining: -1,
             totalAllowed: MONTHLY_FREE_ARTICLES,
           });
         }
@@ -1628,14 +1628,13 @@ app.post(
         });
       }
 
-      // Calculate next reset date
-      const now = new Date();
-      const nextReset = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
+      console.info("calculated usage", {
+        articlesRemaining: MONTHLY_FREE_ARTICLES - userUsage.articlesUsed,
+        totalAllowed: MONTHLY_FREE_ARTICLES,
+      });
       res.json({
         articlesRemaining: MONTHLY_FREE_ARTICLES - userUsage.articlesUsed,
         totalAllowed: MONTHLY_FREE_ARTICLES,
-        nextResetDate: nextReset.toISOString(),
       });
     } catch (error) {
       console.error("Error tracking article analysis:", error);
