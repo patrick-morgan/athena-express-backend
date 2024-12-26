@@ -6,42 +6,39 @@ import express, { NextFunction, Request, Response } from "express";
 import admin from "firebase-admin";
 import { DecodedIdToken } from "firebase-admin/auth";
 // import NodeCache from "node-cache";
+import Logger from "./logger";
+import { CronJob } from "cron";
 import Stripe from "stripe";
-import { getHostname } from "./parsers/helpers";
+import { JournalistBiasWithName, analyzeJournalistById } from "./journalist";
 import { getParser } from "./parsers/parsers";
 import {
-  JournalistAnalysisData,
   PublicationAnalysisData,
-  analyzeJournalistBias,
   analyzePublicationBias,
   gptApiCall,
 } from "./prompts/chatgpt";
 import {
-  SummaryResponseSchema,
-  PoliticalBiasResponseSchema,
-  ObjectivityBiasResponseSchema,
-  SummaryResponse,
-  PoliticalBiasResponse,
-  ObjectivityBiasResponse,
-  buildSummaryPrompt,
-  buildPoliticalBiasPrompt,
-  buildObjectivityPrompt,
-  HTMLParseResponseSchema,
-  buildQuickParsingPrompt,
-  QuickParseResponse,
-  QuickParseParseResponseSchema,
-  buildDateUpdatedPrompt,
-  DateUpdatedResponseSchema,
-  DateUpdatedResponse,
-  buildChatPrompt,
-  ChatResponseSchema,
-  ChatResponse,
   ChatMessage,
+  ChatResponse,
+  ChatResponseSchema,
+  DateUpdatedResponse,
+  DateUpdatedResponseSchema,
+  ObjectivityBiasResponse,
+  ObjectivityBiasResponseSchema,
+  PoliticalBiasResponse,
+  PoliticalBiasResponseSchema,
+  QuickParseParseResponseSchema,
+  QuickParseResponse,
+  SummaryResponse,
+  SummaryResponseSchema,
+  buildChatPrompt,
+  buildDateUpdatedPrompt,
+  buildObjectivityPrompt,
+  buildPoliticalBiasPrompt,
+  buildQuickParsingPrompt,
+  buildSummaryPrompt,
 } from "./prompts/prompts";
 import { getOrCreatePublication } from "./publication";
 import { ArticleData } from "./types";
-import { analyzeJournalistById, JournalistBiasWithName } from "./journalist";
-import { CronJob } from "cron";
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "");
@@ -1518,13 +1515,17 @@ const LIMITS = {
 } as const;
 
 app.post("/articles/:articleId/chat", async (req: Request, res: Response) => {
+  const startTime = Date.now();
   const { articleId } = req.params;
   const { message, previousMessages = [] } = req.body as {
     message: string;
     previousMessages: ChatMessage[];
   };
 
+  Logger.apiRequest("/articles/:articleId/chat", "POST", { articleId });
+
   if (!message) {
+    Logger.warn("Chat request missing message", { articleId });
     return res.status(400).json({ error: "Message is required" });
   }
 
@@ -1561,6 +1562,7 @@ app.post("/articles/:articleId/chat", async (req: Request, res: Response) => {
     });
 
     if (!article) {
+      Logger.error("Chat request article not found");
       return res.status(404).json({ error: "Article not found" });
     }
 
@@ -1685,9 +1687,21 @@ app.post("/articles/:articleId/chat", async (req: Request, res: Response) => {
     const response = await gptApiCall(requestPayload);
     const parsedResponse: ChatResponse = response.choices[0].message.parsed;
 
+    Logger.apiResponse(
+      "/articles/:articleId/chat",
+      200,
+      Date.now() - startTime,
+      {
+        articleId,
+        messageLength: message.length,
+        contextSize: estimateTokens(JSON.stringify(context)),
+        historySize: chatHistory.length,
+      }
+    );
+
     res.json(parsedResponse);
   } catch (error) {
-    console.error("Error in chat:", error);
+    Logger.error("Error in chat", error as Error, { articleId });
     res.status(500).json({ error: "Error processing chat request" });
   }
 });
