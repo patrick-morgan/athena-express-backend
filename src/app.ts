@@ -1628,7 +1628,7 @@ app.post("/articles/:articleId/chat", async (req: Request, res: Response) => {
     // More accurate token estimation
     const estimateTokens = (text: string) => {
       const words = text.split(/\s+/).length;
-      return Math.ceil(words * 0.75);
+      return Math.ceil(words * 1.25);
     };
 
     // Calculate tokens for all analyses and metadata
