@@ -33,6 +33,10 @@ import {
   buildDateUpdatedPrompt,
   DateUpdatedResponseSchema,
   DateUpdatedResponse,
+  buildChatPrompt,
+  ChatResponseSchema,
+  ChatResponse,
+  ChatMessage,
 } from "./prompts/prompts";
 import { getOrCreatePublication } from "./publication";
 import { ArticleData } from "./types";
@@ -1504,6 +1508,189 @@ app.get(
     }
   }
 );
+
+// Constants for token management
+const LIMITS = {
+  MAX_TOTAL_TOKENS: 128_000, // GPT-4 Turbo limit
+  RESERVE_TOKENS: 16_000, // Reserve space for response
+  HISTORY_RESERVE: 16_000, // Limited space for recent conversation
+  // This leaves about 96k tokens for article content and analyses
+} as const;
+
+app.post("/articles/:articleId/chat", async (req: Request, res: Response) => {
+  const { articleId } = req.params;
+  const { message, previousMessages = [] } = req.body as {
+    message: string;
+    previousMessages: ChatMessage[];
+  };
+
+  if (!message) {
+    return res.status(400).json({ error: "Message is required" });
+  }
+
+  try {
+    // Fetch article and all related analyses
+    const article = await prismaLocalClient.article.findUnique({
+      where: { id: articleId },
+      include: {
+        article_authors: {
+          include: {
+            journalist: true,
+          },
+        },
+        publicationObject: true,
+        summary: {
+          orderBy: {
+            created_at: "desc",
+          },
+          take: 1,
+        },
+        polarization_bias: {
+          orderBy: {
+            created_at: "desc",
+          },
+          take: 1,
+        },
+        objectivity_bias: {
+          orderBy: {
+            created_at: "desc",
+          },
+          take: 1,
+        },
+      },
+    });
+
+    if (!article) {
+      return res.status(404).json({ error: "Article not found" });
+    }
+
+    // Get the most recent analyses
+    const latestSummary = article.summary.length ? article.summary[0] : null;
+    const latestPolarizationBias = article.polarization_bias.length
+      ? article.polarization_bias[0]
+      : null;
+    const latestObjectivityBias = article.objectivity_bias.length
+      ? article.objectivity_bias[0]
+      : null;
+
+    // Fetch journalist analyses
+    const journalistAnalyses = await Promise.all(
+      article.article_authors.map(async (aa) => {
+        const bias = await prismaLocalClient.journalist_bias.findFirst({
+          where: { journalist: aa.journalist.id },
+          orderBy: { created_at: "desc" },
+        });
+        return bias
+          ? {
+              name: aa.journalist.name,
+              analysis: bias.summary,
+              bias_score: Number(bias.bias_score),
+              rhetoric_score: Number(bias.rhetoric_score),
+            }
+          : null;
+      })
+    );
+
+    // Fetch publication analysis
+    const publicationBias = await prismaLocalClient.publication_bias.findFirst({
+      where: { publication: article.publication },
+      orderBy: { created_at: "desc" },
+    });
+
+    // Build initial context with everything except article text
+    const baseContext = {
+      articleText: "", // We'll add this after measuring other content
+      articleSummary: latestSummary?.summary || undefined,
+      politicalBiasScore: latestPolarizationBias
+        ? Number(latestPolarizationBias.bias_score)
+        : undefined,
+      politicalBiasAnalysis: latestPolarizationBias?.analysis || undefined,
+      objectivityScore: latestObjectivityBias
+        ? Number(latestObjectivityBias.rhetoric_score)
+        : undefined,
+      objectivityAnalysis: latestObjectivityBias?.analysis || undefined,
+      journalistAnalyses: journalistAnalyses.filter(
+        (j): j is NonNullable<typeof j> => j !== null
+      ),
+      publicationAnalysis:
+        publicationBias && article.publicationObject
+          ? {
+              name: article.publicationObject.name || "",
+              analysis: publicationBias.summary,
+              bias_score: Number(publicationBias.bias_score),
+              rhetoric_score: Number(publicationBias.rhetoric_score),
+            }
+          : undefined,
+    };
+
+    // More accurate token estimation
+    const estimateTokens = (text: string) => {
+      const words = text.split(/\s+/).length;
+      return Math.ceil(words * 0.75);
+    };
+
+    // Calculate tokens for all analyses and metadata
+    const baseContextTokens = estimateTokens(JSON.stringify(baseContext));
+
+    // Calculate available space for article text
+    const availableForArticle =
+      LIMITS.MAX_TOTAL_TOKENS -
+      LIMITS.RESERVE_TOKENS -
+      LIMITS.HISTORY_RESERVE -
+      baseContextTokens;
+
+    // Add article text, truncating if necessary
+    const articleTextTokens = estimateTokens(article.text || "");
+    const context = {
+      ...baseContext,
+      articleText:
+        articleTextTokens > availableForArticle
+          ? article.text!.slice(
+              0,
+              Math.floor(
+                article.text!.length * (availableForArticle / articleTextTokens)
+              )
+            ) + "\n[Article text truncated due to length...]"
+          : article.text || "",
+    };
+
+    // Handle chat history with remaining space
+    let chatHistory = [...previousMessages];
+    let historyTokens = chatHistory.reduce(
+      (sum, msg) => sum + estimateTokens(msg.content),
+      0
+    );
+
+    // Keep only most recent messages within our limited history reserve
+    while (chatHistory.length > 0 && historyTokens > LIMITS.HISTORY_RESERVE) {
+      const oldestMessage = chatHistory.shift()!;
+      historyTokens -= estimateTokens(oldestMessage.content);
+
+      // Add a note if we're removing messages
+      if (chatHistory.length === 0) {
+        chatHistory.unshift({
+          role: "assistant",
+          content: "*[Earlier messages omitted to prioritize article context]*",
+        });
+      }
+    }
+
+    // Generate chat response
+    const requestPayload = {
+      prompt: buildChatPrompt(message, context, chatHistory),
+      zodSchema: ChatResponseSchema,
+      propertyName: "chat_response",
+    };
+
+    const response = await gptApiCall(requestPayload);
+    const parsedResponse: ChatResponse = response.choices[0].message.parsed;
+
+    res.json(parsedResponse);
+  } catch (error) {
+    console.error("Error in chat:", error);
+    res.status(500).json({ error: "Error processing chat request" });
+  }
+});
 
 // Get all articles
 app.get("/articles", async (req, res) => {
