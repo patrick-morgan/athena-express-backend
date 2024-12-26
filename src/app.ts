@@ -1725,7 +1725,7 @@ app.get("/articles", async (req, res) => {
   }
 });
 
-const MONTHLY_FREE_ARTICLES = 10;
+const MONTHLY_FREE_ARTICLES = 5;
 
 // Get user's current usage
 app.get(
