@@ -39,6 +39,7 @@ import {
 } from "./prompts/prompts";
 import { getOrCreatePublication } from "./publication";
 import { ArticleData } from "./types";
+import { cleanArticleText } from "./utils/textCleaner";
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "");
@@ -805,6 +806,8 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
             : article.date_updated
             ? article.date_updated
             : null,
+          // Clean the text before saving
+          text: cleanArticleText(head + body),
         },
       });
     } else {
@@ -824,7 +827,8 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
           date_updated: parsedData.date_updated
             ? new Date(parsedData.date_updated)
             : datePublished,
-          text: head + body,
+          // Clean the text before saving
+          text: cleanArticleText(head + body),
           publication: (await getOrCreatePublication(hostname)).id,
         },
         include: {
@@ -906,140 +910,6 @@ app.post("/articles/quick-parse", async (req: Request, res: Response) => {
     res.status(500).json({ error: "Error in quick parse" });
   }
 });
-
-// Full parse route
-app.post("/articles/full-parse", async (req: Request, res: Response) => {
-  const { url, html } = req.body;
-  console.time("full-parse");
-
-  try {
-    console.time("parser-initialization");
-    const parser = getParser(url, html);
-    console.timeEnd("parser-initialization");
-
-    console.time("article-parsing");
-    const articleData: ArticleData = await parser.parse();
-    console.timeEnd("article-parsing");
-
-    console.info("articleData", articleData);
-
-    console.time("find-existing-article");
-    let article = await prismaLocalClient.article.findFirst({
-      where: { url },
-      include: { article_authors: true },
-    });
-    console.timeEnd("find-existing-article");
-
-    console.time("article-upsert");
-    if (article) {
-      console.info("Updating existing article", article.id);
-      article = await prismaLocalClient.article.update({
-        where: { id: article.id },
-        include: { article_authors: true },
-        data: {
-          title: articleData.title,
-          date_published: articleData.date_published,
-          date_updated: articleData.date_updated,
-          text: articleData.text,
-        },
-      });
-    } else {
-      console.info("Creating new article");
-      article = await prismaLocalClient.article.create({
-        data: {
-          url,
-          title: articleData.title,
-          date_published: articleData.date_published,
-          date_updated: articleData.date_updated,
-          text: articleData.text,
-          publication: (await getOrCreatePublication(articleData.hostname)).id,
-        },
-        include: { article_authors: true },
-      });
-    }
-    console.timeEnd("article-upsert");
-
-    console.info("Updating authors", article.id, articleData.authors);
-
-    console.time("update-authors");
-    const updatedArticle = await updateAuthors(
-      article.id,
-      articleData.authors,
-      article.publication
-    );
-    console.timeEnd("update-authors");
-
-    console.info("Updated authors", updatedArticle.article_authors);
-
-    console.time("fetch-publication");
-    const publication = await prismaLocalClient.publication.findUnique({
-      where: { id: updatedArticle.publication },
-    });
-    console.timeEnd("fetch-publication");
-
-    console.info("publication", publication);
-
-    console.time("fetch-journalists");
-    const journalists = await prismaLocalClient.journalist.findMany({
-      where: {
-        id: {
-          in: updatedArticle.article_authors.map((aa) => aa.journalist_id),
-        },
-      },
-    });
-    console.timeEnd("fetch-journalists");
-
-    console.info("journalists", journalists.length);
-
-    const response = {
-      article: updatedArticle,
-      publication: publication!,
-      journalists: journalists,
-    };
-
-    console.info("article_full_parsed", { article: response });
-    console.timeEnd("full-parse");
-    res.json(response);
-  } catch (error) {
-    console.error("Error in full parse:", error);
-    console.timeEnd("full-parse");
-    res.status(500).json({ error: "Error in full parse" });
-  }
-});
-
-// // Publication metadata route
-// app.post("/publication-metadata", async (req: Request, res: Response) => {
-//   const { hostname } = req.body;
-
-//   try {
-//     const publication = await getOrCreatePublication(hostname);
-//     res.json(publication);
-//   } catch (error) {
-//     console.error("Error fetching publication metadata:", error);
-//     res.status(500).json({ error: "Error fetching publication metadata" });
-//   }
-// });
-
-// async function getOrCreatePublication(hostname: string) {
-//   let publication = await prismaLocalClient.publication.findFirst({
-//     where: { hostname },
-//   });
-
-//   if (!publication) {
-//     const publication = await fetchPublicationMetadata(hostname);
-//     // publication = await prismaLocalClient.publication.create({
-//     //   data: {
-//     //     hostname,
-//     //     name: metadata.name,
-//     //     date_founded: metadata.date_founded
-//     //       ? new Date(metadata.date_founded)
-//     //       : null,
-//     //   },
-//     // });
-//   }
-
-//   return publication.id;
-// }
 
 async function updateAuthors(
   articleId: string,
