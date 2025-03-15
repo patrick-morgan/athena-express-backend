@@ -166,6 +166,27 @@ export const QuickParseParseResponseSchema = z.object({
 });
 export type QuickParseResponse = z.infer<typeof QuickParseParseResponseSchema>;
 
+// export const buildQuickParsingPrompt = (head: string, body: string) => `
+// Objective: Given the HTML head and HTML body of an HTML news article, extract the following fields: title, author(s), date of publication, date of last update, political bias score, objectivity score, and summary. Notice, that this is all of the text content from an HTML news article, so it will contain ads, videos, and other random extraneous text. The article title should be the first thing in the head tag (or in the first few lines of the body tag, or both), and the article content should be the main text content in the body tag, so any text that does not follow this subject matter or does not read as the normal flow of the article should be ignored. If the content appears to be private or sensitive information, please do not include this text. These summaries are shared across users, so only analysis on public information (preferably news articles) should be allowed.
+
+// HTML Head:
+// ${head}
+
+// HTML Body:
+// ${body}
+
+// Guidelines for Parsing:
+
+// 1. **Title**: Identify the title of the article. The title will most likely be in the head or at the beginning of the body. Many titles will contain the title followed by a line separator (usually | or -) and then the name of the publication. You do not need to include the separator or the publication if it is in this format and not an actual part of the title. If the title cannot be reasonably determined or does not appear to be present, generate a title based on the content.
+// 2. **Author(s)**: Identify the author or authors of the article and respond with their names in format ["author name", "or multiple author names", "or empty array []"]. If the author(s) cannot be reasonably determined, respond with an empty array []. The authors will not always be listed, normally it is at the beginning or end of the article. Some author's names will appear to have the publication before it (e.g. CNN's John Doe), in this case, only include the author's name and not the publication. The authors names should read like normal human names, or if it is the staff, e.g. CNN Staff, that is okay too.
+// 3. **Date Published**: Extract the date and time the article was published or last updated. This date is often preceded by the word "published" or "updated". If the date cannot be reasonably determined, respond with an empty string "". The date is normally at the beginning or end of the article. Format the date and time as an ISO 8601 string (e.g., "2024-09-26T14:30:00Z"). If only the date is available without a specific time, use midnight UTC (e.g., "2024-09-26T00:00:00Z"). If the time zone is specified, convert to UTC. If no time zone is specified, it should be specified right after the time, assume it's in eastern daylight time, convert to UTC, and append 'Z' to indicate UTC.
+// 4. **Date Updated**: Extract the date and time the article was last updated, if available. This date is often preceded by words like "updated" or "last modified". Format it the same way as the Date Published. If there's no separate update date or it cannot be determined, respond with an empty string "".
+// 5. **Political Bias Score**: Analyze the given news article for political bias and assign a bias score from 0 to 100 (0 = very left-wing/democrat/liberal, 50 = moderate, 100 = very right-wing/republican/conservative). If the article is not a news article or political bias is not relevant, assign a bias score of 50.
+// 6. **Objectivity Score**: Analyze the given news article to determine how opinionated or factual it is, assigning a rhetoric score from 0 to 100 (0 = very opinionated, 100 = very factual).If the article is not a news article or objectivity analysis is not relevant, assign a rhetoric score of 100.
+// 7. **Article Summary**: Generate a concise and accurate summary of the given news article, highlighting the main points, key arguments, significant evidence, political bias, and objectivity. Generate multiple bullet points for the summary (depending on how long the article is) that give a complete summary of the article, one bullet for political bias explaining the score and rationale as to why it received that score including direct evidence from the article and one for objectivity score explaining the same thing. The goal of this summary is to provide a quick overview of the article's content (it should be clear and concise but also sufficient to get the gist of the article), political bias, and objectivity, so at a glance a user can understand what they are looking at without spending any time reading the actual article. If the content is not a news article, generate a summary and note that it may not be news content. If the content appears to be private or sensitive information, please do not include this text. These summaries are shared across users, so only analysis on public information (preferably news articles) should be allowed.
+
+// Please parse the HTML DOM substring based on the guidelines and example format provided above.
+// `;
 export const buildQuickParsingPrompt = (head: string, body: string) => `
 Objective: Given the HTML head and HTML body of an HTML news article, extract the following fields: title, author(s), date of publication, date of last update, political bias score, objectivity score, and summary. Notice, that this is all of the text content from an HTML news article, so it will contain ads, videos, and other random extraneous text. The article title should be the first thing in the head tag (or in the first few lines of the body tag, or both), and the article content should be the main text content in the body tag, so any text that does not follow this subject matter or does not read as the normal flow of the article should be ignored. If the content appears to be private or sensitive information, please do not include this text. These summaries are shared across users, so only analysis on public information (preferably news articles) should be allowed.
 
@@ -178,14 +199,54 @@ ${body}
 Guidelines for Parsing:
 
 1. **Title**: Identify the title of the article. The title will most likely be in the head or at the beginning of the body. Many titles will contain the title followed by a line separator (usually | or -) and then the name of the publication. You do not need to include the separator or the publication if it is in this format and not an actual part of the title. If the title cannot be reasonably determined or does not appear to be present, generate a title based on the content.
-2. **Author(s)**: Identify the author or authors of the article and respond with their names in format ["author name", "or multiple author names", "or empty array []"]. If the author(s) cannot be reasonably determined, respond with an empty array []. The authors will not always be listed, normally it is at the beginning or end of the article. Some author's names will appear to have the publication before it (e.g. CNN's John Doe), in this case, only include the author's name and not the publication. The authors names should read like normal human names, or if it is the staff, e.g. CNN Staff, that is okay too.
-3. **Date Published**: Extract the date and time the article was published or last updated. This date is often preceded by the word "published" or "updated". If the date cannot be reasonably determined, respond with an empty string "". The date is normally at the beginning or end of the article. Format the date and time as an ISO 8601 string (e.g., "2024-09-26T14:30:00Z"). If only the date is available without a specific time, use midnight UTC (e.g., "2024-09-26T00:00:00Z"). If the time zone is specified, convert to UTC. If no time zone is specified, it should be specified right after the time, assume it's in eastern daylight time, convert to UTC, and append 'Z' to indicate UTC.
-4. **Date Updated**: Extract the date and time the article was last updated, if available. This date is often preceded by words like "updated" or "last modified". Format it the same way as the Date Published. If there's no separate update date or it cannot be determined, respond with an empty string "".
-5. **Political Bias Score**: Analyze the given news article for political bias and assign a bias score from 0 to 100 (0 = very left-wing/democrat/liberal, 50 = moderate, 100 = very right-wing/republican/conservative). If the article is not a news article or political bias is not relevant, assign a bias score of 50.
-6. **Objectivity Score**: Analyze the given news article to determine how opinionated or factual it is, assigning a rhetoric score from 0 to 100 (0 = very opinionated, 100 = very factual).If the article is not a news article or objectivity analysis is not relevant, assign a rhetoric score of 100.
-7. **Article Summary**: Generate a concise and accurate summary of the given news article, highlighting the main points, key arguments, significant evidence, political bias, and objectivity. Generate multiple bullet points for the summary (depending on how long the article is) that give a complete summary of the article, one bullet for political bias explaining the score and rationale as to why it received that score including direct evidence from the article and one for objectivity score explaining the same thing. The goal of this summary is to provide a quick overview of the article's content (it should be clear and concise but also sufficient to get the gist of the article), political bias, and objectivity, so at a glance a user can understand what they are looking at without spending any time reading the actual article. If the content is not a news article, generate a summary and note that it may not be news content. If the content appears to be private or sensitive information, please do not include this text. These summaries are shared across users, so only analysis on public information (preferably news articles) should be allowed.
 
-Please parse the HTML DOM substring based on the guidelines and example format provided above.
+2. **Author(s)**: Identify the author or authors of the article and respond with their names in format ["author name", "or multiple author names", "or empty array []"]. If the author(s) cannot be reasonably determined, respond with an empty array []. The authors will not always be listed, normally it is at the beginning or end of the article. Some author's names will appear to have the publication before it (e.g. CNN's John Doe), in this case, only include the author's name and not the publication. The authors names should read like normal human names, or if it is the staff, e.g. CNN Staff, that is okay too.
+
+3. **Date Published**: Extract the date and time the article was published or last updated. This date is often preceded by the word "published" or "updated". If the date cannot be reasonably determined, respond with an empty string "". The date is normally at the beginning or end of the article. Format the date and time as an ISO 8601 string (e.g., "2024-09-26T14:30:00Z"). If only the date is available without a specific time, use midnight UTC (e.g., "2024-09-26T00:00:00Z"). If the time zone is specified, convert to UTC. If no time zone is specified, it should be specified right after the time, assume it's in eastern daylight time, convert to UTC, and append 'Z' to indicate UTC.
+
+4. **Date Updated**: Extract the date and time the article was last updated, if available. This date is often preceded by words like "updated" or "last modified". Format it the same way as the Date Published. If there's no separate update date or it cannot be determined, respond with an empty string "".
+
+5. **Political Bias Score**: Analyze the article for political bias and assign a score from 0 to 100, where:
+   - 0-20: Strongly left-leaning (progressive/liberal)
+   - 21-40: Moderately left-leaning
+   - 41-60: Centrist/balanced
+   - 61-80: Moderately right-leaning
+   - 81-100: Strongly right-leaning (conservative/traditional)
+   
+   Consider these factors equally when determining bias:
+   - Topic selection and emphasis
+   - Word choice and framing
+   - Sources quoted and their political alignment
+   - Context provided or omitted
+   - Representation of different viewpoints
+   - Historical and factual accuracy
+   
+   Evaluate each factor independently and avoid letting one factor dominate your assessment. Be particularly careful to differentiate between factual reporting that may appear critical of either side versus actual political bias. If the article is not political in nature, assign a score of 50.
+
+6. **Objectivity Score**: Analyze the article's objectivity and assign a score from 0 to 100, where:
+   - 0-20: Highly opinionated (primarily opinion with few facts)
+   - 21-40: More opinion than fact
+   - 41-60: Balanced mix of fact and opinion
+   - 61-80: More fact than opinion
+   - 81-100: Highly factual (primarily straightforward reporting)
+   
+   Base this evaluation on:
+   - Ratio of verifiable facts to opinions/commentary
+   - Use of loaded language or emotional appeals
+   - Presence of multiple perspectives
+   - Attribution of claims to specific sources
+   - Clear distinction between news and commentary
+   
+   If the article is not a news article, assign a score of 50.
+
+7. **Article Summary**: Generate a concise and accurate summary of the article, including:
+   - 3-5 bullet points covering the main factual points
+   - 1 bullet point explaining the political bias score with specific examples from the text
+   - 1 bullet point explaining the objectivity score with specific examples from the text
+   
+   The summary should be clear and comprehensive enough that a reader can understand the article's key points without reading the full text. Focus on accurately representing the article's content regardless of your own political views. If the content appears to be private or sensitive information, do not include this text.
+
+Please parse the HTML DOM substring based on the guidelines provided above. Be careful to analyze bias based on concrete textual evidence rather than assumptions, and consider multiple interpretations when evaluating political leanings.
 `;
 
 export type ArticleData = {

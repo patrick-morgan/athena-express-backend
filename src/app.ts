@@ -6,11 +6,10 @@ import express, { NextFunction, Request, Response } from "express";
 import admin from "firebase-admin";
 import { DecodedIdToken } from "firebase-admin/auth";
 // import NodeCache from "node-cache";
-import Logger from "./logger";
 import { CronJob } from "cron";
 import Stripe from "stripe";
 import { JournalistBiasWithName, analyzeJournalistById } from "./journalist";
-import { getParser } from "./parsers/parsers";
+import Logger from "./logger";
 import {
   PublicationAnalysisData,
   analyzePublicationBias,
@@ -38,7 +37,6 @@ import {
   buildSummaryPrompt,
 } from "./prompts/prompts";
 import { getOrCreatePublication } from "./publication";
-import { ArticleData } from "./types";
 import { cleanArticleText } from "./utils/textCleaner";
 
 // Initialize Stripe
