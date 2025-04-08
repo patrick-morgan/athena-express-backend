@@ -254,7 +254,7 @@ app.post(
               product_data: {
                 name: "Athena AI Subscription",
               },
-              unit_amount: 500, //500, // $5.00
+              unit_amount: 0, //500, // $5.00
               recurring: {
                 interval: "month",
               },
